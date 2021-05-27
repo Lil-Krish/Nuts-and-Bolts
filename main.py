@@ -3,11 +3,10 @@ from discord.ext import commands
 import discord
 
 initial_extensions = {
-    'cogs.meta.meta',
-    'cogs.tags.tags'
+    'cogs.meta'
 }
 
-class AlphaCore(commands.Bot):
+class NutsandBolts(commands.Bot):
     def __init__(self):
         dotenv.load_dotenv()
         
@@ -23,7 +22,7 @@ class AlphaCore(commands.Bot):
         super().run(os.getenv('TOKEN'), reconnect=True)
 
 def main():
-    bot = AlphaCore()
+    bot = NutsandBolts()
     bot.run()
 
 if __name__ == '__main__':

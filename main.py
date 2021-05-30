@@ -6,7 +6,7 @@ initial_extensions = {
     'cogs.meta'
 }
 
-class NutsandBolts(commands.Bot):
+class NutsandBolts(commands.AutoShardedBot):
     def __init__(self):
         intents = discord.Intents.all()
         activity = discord.Activity(type=discord.ActivityType.watching, name="for ?help")
@@ -16,7 +16,9 @@ class NutsandBolts(commands.Bot):
         for extension in initial_extensions:
             self.load_extension(extension)
         
-        self.token = toml.load('token.toml')['token']
+        self.closed = toml.load('closed.toml')
+        
+        self.owner, self.token = self.closed['owner'], self.closed['token']
 
     def run(self):
         super().run(self.token, reconnect=True)

@@ -1,4 +1,4 @@
-import os, time, dotenv
+import time
 from .utils.paginator import Embed, Pages
 from discord.ext import commands, menus
 import discord
@@ -133,7 +133,6 @@ class Meta(commands.Cog):
     """Handles utilities related to the bot itself."""
 
     def __init__(self, bot):
-        dotenv.load_dotenv()
         self.bot = bot
         bot.help_command = Help()
         bot.help_command.cog = self
@@ -143,8 +142,8 @@ class Meta(commands.Cog):
     async def hello(self, ctx):
         """Displays the intro message."""
 
-        owner = self.bot.get_user(int(os.getenv('owner')))
-        await ctx.send(f'Hello! I\'m a robot! {owner.name}#{owner.discriminator} made me. Use `?help [command]` to learn what I can do! I record all timestamps in EST.')
+        owner = self.bot.get_user(int(self.bot.owner))
+        await ctx.send(f'Hello! I\'m a robot! {owner.name}#{owner.discriminator} made me. Use `?help` to learn what I can do!')
     
     @commands.command()
     async def ping(self, ctx):
@@ -164,7 +163,7 @@ class Meta(commands.Cog):
 
 
         author = await ctx.author.create_dm()
-        owner = await self.bot.get_user(os.get_env('owner')).create_dm()
+        owner = await self.bot.get_user(self.bot.owner).create_dm()
 
         await owner.send(f'{ctx.author.name}#{ctx.author.discriminator} suggested "{suggestion}".')
         await author.send('Your suggestion has been recorded.')

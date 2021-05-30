@@ -1,4 +1,4 @@
-import os, dotenv
+import toml
 from discord.ext import commands
 import discord
 
@@ -8,8 +8,6 @@ initial_extensions = {
 
 class NutsandBolts(commands.Bot):
     def __init__(self):
-        dotenv.load_dotenv()
-        
         intents = discord.Intents.all()
         activity = discord.Activity(type=discord.ActivityType.watching, name="for ?help")
         
@@ -17,9 +15,12 @@ class NutsandBolts(commands.Bot):
         
         for extension in initial_extensions:
             self.load_extension(extension)
+        
+        self.token = toml.load('token.toml')['token']
 
     def run(self):
-        super().run(os.getenv('TOKEN'), reconnect=True)
+        super().run(self.token, reconnect=True)
+
 
 def main():
     bot = NutsandBolts()

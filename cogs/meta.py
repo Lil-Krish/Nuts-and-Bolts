@@ -1,4 +1,5 @@
 import time
+from .utils import checks
 from .utils.paginator import Embed, Pages
 from discord.ext import commands, menus
 import discord
@@ -69,8 +70,7 @@ class Help(commands.HelpCommand):
         })
 
     async def on_help_command_error(self, ctx, error):
-        if isinstance(error, commands.CommandInvokeError):
-            await ctx.send(str(error.original))
+        await checks.error_handler(ctx, error)
     
     def get_command_signature(self, command):
         parent = command.full_parent_name
@@ -136,14 +136,16 @@ class Meta(commands.Cog):
         self.bot = bot
         bot.help_command = Help()
         bot.help_command.cog = self
-        self.snowflake = 16775930
+
+    async def cog_command_error(self, ctx, error):
+       await checks.error_handler(ctx, error)
     
     @commands.command(aliases=['hi'])
     async def hello(self, ctx):
         """Displays the intro message."""
 
-        owner = self.bot.get_user(int(self.bot.owner))
-        await ctx.send(f'Hello! I\'m a robot! {owner.name}#{owner.discriminator} made me. Use `?help` to learn what I can do!')
+        owner = self.bot.get_user(int(self.bot.owner_id))
+        await ctx.send(f'Hello! I\'m a robot! {owner} made me. Use `?help` to learn what I can do!')
     
     @commands.command()
     async def ping(self, ctx):
@@ -161,11 +163,10 @@ class Meta(commands.Cog):
         You can only give feedback once a minute. Misuse will lead to a blacklist.
         """
 
-
         author = await ctx.author.create_dm()
-        owner = await self.bot.get_user(self.bot.owner).create_dm()
+        owner = await self.bot.get_user(self.bot.owner_id).create_dm()
 
-        await owner.send(f'{ctx.author.name}#{ctx.author.discriminator} suggested "{suggestion}".')
+        await owner.send(f'{ctx.author} suggested "{suggestion}".')
         await author.send('Your suggestion has been recorded.')
     
     @commands.Cog.listener()

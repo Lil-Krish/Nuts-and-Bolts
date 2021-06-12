@@ -62,9 +62,6 @@ class Mod(commands.Cog):
         self.bot = bot
         self._spam_check = defaultdict(SpamCheck)
 
-    # async def cog_command_error(self, ctx, error):
-        # await checks.error_handler(ctx, error)
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.id in (self.bot.user.id, self.bot.owner_id):

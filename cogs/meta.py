@@ -68,9 +68,6 @@ class Help(commands.HelpCommand):
         super().__init__(command_attrs={
             'help': 'Shows help about a command or category.'
         })
-
-    async def on_help_command_error(self, ctx, error):
-        await checks.error_handler(ctx, error)
     
     def get_command_signature(self, command):
         parent = command.full_parent_name
@@ -136,9 +133,6 @@ class Meta(commands.Cog):
         self.bot = bot
         bot.help_command = Help()
         bot.help_command.cog = self
-
-    async def cog_command_error(self, ctx, error):
-       await checks.error_handler(ctx, error)
     
     @commands.command(aliases=['hi'])
     async def hello(self, ctx):

@@ -18,6 +18,17 @@ async def can_use(ctx, user, target):
     else:
         raise commands.BadArgument(f'You cannot execute this action on {target} due to role/server hierarchy.')
 
+async def can_set(ctx, user, role):
+    if (user == ctx.guild.owner or user.top_role > role):
+        return True
+    else:
+        raise commands.BadArgument(f'You cannot execute this action on {role} due to role/server hierarchy.')
+
+def manage_roles():
+    async def wrap(ctx):
+        return await _check_guild_permissions(ctx, {'manage_roles': True})
+    return commands.check(wrap)
+
 def can_ban():
     async def wrap(ctx):
         return await _check_guild_permissions(ctx, {'ban_members': True})
@@ -39,7 +50,9 @@ def is_admin():
     return commands.check(wrap)
 
 async def error_handler(ctx, error):
-    if isinstance(error, commands.BadArgument):
+    if isinstance(error, commands.CommandNotFound):
+        pass
+    elif isinstance(error, commands.BadArgument):
         await ctx.send(error)
     elif isinstance(error, commands.CommandInvokeError):
         original = error.original
@@ -54,4 +67,5 @@ async def error_handler(ctx, error):
     elif isinstance(error, commands.CheckFailure):
         await ctx.send('You do not have permission to execute this command.')
     else:
+        print(type(error))
         await ctx.send(error)

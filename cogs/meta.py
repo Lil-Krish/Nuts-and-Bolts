@@ -152,9 +152,10 @@ class Meta(commands.Cog):
         """Replies with the bot latency."""
 
         timing = round(round(self.bot.latency, 10) * 1000, 2)
-        await ctx.send(f'Pong. ({timing} ms)')
+        await ctx.reply(f'Pong. ({timing} ms)')
     
     @commands.command()
+    @commands.dm_only()
     @commands.cooldown(1, 60, commands.BucketType.member)
     async def suggest(self, ctx, *, suggestion: str):
         """Requests the developer to fix or add a feature to the bot.
@@ -163,11 +164,10 @@ class Meta(commands.Cog):
         You can only give feedback once a minute. Misuse will lead to a blacklist.
         """
 
-        author = await ctx.author.create_dm()
         owner = await self.bot.get_user(self.bot.owner_id).create_dm()
 
         await owner.send(f'{ctx.author} suggested "{suggestion}".')
-        await author.send('Your suggestion has been recorded.')
+        await ctx.send('Your suggestion has been recorded.')
     
     @commands.Cog.listener()
     async def on_connect(self):
@@ -189,7 +189,7 @@ class Meta(commands.Cog):
         
         uptime = f"{attrs['h'][(hrs, 2)[hrs > 1]]}{attrs['m'][(mins, 2)[mins > 1]]}{attrs['s'][(secs, 2)[secs > 1]]}"[:-2]
         
-        await ctx.send('Uptime: **'+uptime+'**.')
+        await ctx.reply('Uptime: **'+uptime+'**.')
 
 
 def setup(bot):

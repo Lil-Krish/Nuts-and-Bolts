@@ -77,7 +77,7 @@ class Mod(commands.Cog):
     async def kick(self, ctx, mentions: commands.Greedy[discord.Member], *, reason=None):
         """Kicks members from the server.
 
-        The command author will be notified of members who could not be kicked.
+        The command author will be notified of members who could not be kicked unexpectedly.
 
         To use this command, you must have the Kick Members permission.
         The bot must have the Kick Members permission for this command to run.
@@ -86,7 +86,7 @@ class Mod(commands.Cog):
         full = await Conversion.add_info(ctx, reason)
 
         failed = 0
-        kicked = []
+        command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
         for member in mentions:
             try:
@@ -94,15 +94,15 @@ class Mod(commands.Cog):
                 await ctx.guild.kick(member, reason=full)
             except errors as error:
                 if (type(error) == errors[0]):
-                    kicked.append(member)
+                    command_failures.append(member)
                 elif (type(error) == errors[1]):
                     await ctx.send(error)
                 failed += 1
 
         await ctx.reply(f'Kicked {len(mentions) - failed}/{len(mentions)} members.')
 
-        if kicked:
-            update = 'These members could not be kicked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in kicked) if kicked else None
+        if command_failures:
+            update = 'These members could not be kicked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -113,7 +113,7 @@ class Mod(commands.Cog):
     async def ban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason=None):
         """Bans members from the server.
 
-        The command author will be notified of members who could not be banned.
+        The command author will be notified of members who could not be banned unexpectedly.
 
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
@@ -122,7 +122,7 @@ class Mod(commands.Cog):
         full = await Conversion.add_info(ctx, reason)
 
         failed = 0
-        banned = []
+        command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
         for member in mentions:
             try:
@@ -130,15 +130,15 @@ class Mod(commands.Cog):
                 await ctx.guild.ban(member, reason=full)
             except errors as error:
                 if (type(error) == errors[0]):
-                    banned.append(member)
+                    command_failures.append(member)
                 elif (type(error) == errors[1]):
                     await ctx.send(error)
                 failed += 1
 
         await ctx.reply(f'Banned {len(mentions) - failed}/{len(mentions)} members.')
 
-        if banned:
-            update = 'These members could not be banned due to unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in banned) if banned else None
+        if command_failures:
+            update = 'These members could not be banned due to unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -150,7 +150,7 @@ class Mod(commands.Cog):
         """Softbans members from the server.
 
         Softbanning entails the ban and the immediate unban of a member, effectively kicking them while also removing their messages.
-        The command author will be notified of members who could not be softbanned.
+        The command author will be notified of members who could not be softbanned unexpectedly.
 
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
@@ -159,7 +159,7 @@ class Mod(commands.Cog):
         full = await Conversion.add_info(ctx, reason)
         
         failed = 0
-        softbanned = []
+        command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
         for member in mentions:
             try:
@@ -168,15 +168,15 @@ class Mod(commands.Cog):
                 await ctx.guild.unban(member, reason=full)
             except errors as error:
                 if (type(error) == errors[0]):
-                    softbanned.append(member)
+                    command_failures.append(member)
                 elif (type(error) == errors[1]):
                     await ctx.send(error)
                 failed += 1
 
         await ctx.reply(f'Softbanned {len(mentions) - failed}/{len(mentions)} members.')
 
-        if softbanned:
-            update = 'These members could not be softbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in softbanned) if softbanned else None
+        if command_failures:
+            update = 'These members could not be softbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -187,7 +187,7 @@ class Mod(commands.Cog):
     async def unban(self, ctx, ids: commands.Greedy[int], *, reason=None):
         """Revokes the ban from members on the server.
 
-        The command author will be notified of members who could not be unbanned.
+        The command author will be notified of members who could not be unbanned unexpectedly.
 
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
@@ -196,7 +196,7 @@ class Mod(commands.Cog):
         full = await Conversion.add_info(ctx, reason)
         
         failed = 0
-        unbanned = []
+        command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
         for member_id in ids:
             try:
@@ -211,8 +211,8 @@ class Mod(commands.Cog):
 
         await ctx.reply(f'Unbanned {len(ids) - failed}/{len(ids)} members.')
 
-        if unbanned:
-            update = 'These members could not be unbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in unbanned) if unbanned else None
+        if command_failures:
+            update = 'These members could not be unbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -224,6 +224,7 @@ class Mod(commands.Cog):
         """Adds roles to members. 
         
         Members already with a mentioned role will not be affected.
+        The command author will be notified of roles/members who were not affected unexpectedly.
 
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
@@ -232,33 +233,47 @@ class Mod(commands.Cog):
         full = await Conversion.add_info(ctx, reason)
 
         failed_roles = 0
-        working_roles = []
+        working_roles, role_failures = [], []
         errors = (discord.HTTPException, commands.BadArgument)
         for role in roles:
             try:
                 await checks.can_set(ctx, ctx.author, role)
                 working_roles.append(role)
             except errors as error:
+                if (type(error) == errors[0]):
+                    role_failures.append(role)
                 if (type(error) == errors[1]):
                     await ctx.send(error)
                 failed_roles += 1
 
         failed_members = 0
+        member_failures = []
         for member in mentions:
             try:
                 await member.add_roles(*working_roles, reason=full)
             except discord.HTTPException:
+                member_failures.append(member)
                 failed_members += 1
 
         await ctx.reply(f'Added {len(roles) - failed_roles}/{len(roles)} roles to {len(mentions) - failed_members}/{len(mentions)} members.')
 
+        role_update = 'These roles could not be added for unexpected reasons: \n' + '\n'.join(str(role)+' ||(ID: '+str(role.id)+')||' for role in role_failures) if role_failures else None
+        member_update = 'Roles could not be added to these members for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in member_failures) if member_failures else None
+
+        if role_update or member_update:
+            update = str(role_update or '') + '\n' + str(member_update or '')
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
+    
     @commands.command()
     @commands.guild_only()
     @checks.manage_roles()
     async def take(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], reason=None):
-        """Takes roles to members. 
+        """Takes roles from members. 
         
         Members already without a mentioned role will not be affected.
+        The command author will be notified of roles/members who were not affected unexpectedly.
 
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
@@ -267,13 +282,15 @@ class Mod(commands.Cog):
         full = await Conversion.add_info(ctx, reason)
 
         failed_roles = 0
-        working_roles = []
+        working_roles, role_failures = [], []
         errors = (discord.HTTPException, commands.BadArgument)
         for role in roles:
             try:
                 await checks.can_set(ctx, ctx.author, role)
                 working_roles.append(role)
             except errors as error:
+                if (type(error) == errors[0]):
+                    role_failures.append(role)
                 if (type(error) == errors[1]):
                     await ctx.send(error)
                 failed_roles += 1
@@ -286,6 +303,15 @@ class Mod(commands.Cog):
                 failed_members += 1
 
         await ctx.reply(f'Removed {len(roles) - failed_roles}/{len(roles)} roles from {len(mentions) - failed_members}/{len(mentions)} members.')
+
+        role_update = 'These roles could not be removed for unexpected reasons: \n' + '\n'.join(str(role)+' ||(ID: '+str(role.id)+')||' for role in role_failures) if role_failures else None
+        member_update = 'Roles could not be removed from these members for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in member_failures) if member_failures else None
+
+        if role_update or member_update:
+            update = str(role_update or '') + '\n' + str(member_update or '')
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
 
 
 def setup(bot):

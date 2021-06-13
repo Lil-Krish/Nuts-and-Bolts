@@ -108,11 +108,6 @@ class Help(commands.HelpCommand):
         embed.description = command.help
         embed.set_footer(text="Use ?help to view a list of all commands.")
 
-    async def send_command_help(self, command):
-        embed = Embed(ctx=self.context)
-        self.command_formatting(embed, command)
-        await self.context.send(embed=embed)
-
     async def send_group_help(self, group):
         sub = group.commands
         if len(sub) == 0:
@@ -125,6 +120,10 @@ class Help(commands.HelpCommand):
         menu = Pages(GroupPageSource(group, entries, self.context), self.context)
         await menu.start(self.context)
 
+    async def send_command_help(self, command):
+        embed = Embed(ctx=self.context)
+        self.command_formatting(embed, command)
+        await self.context.send(embed=embed)
 
 class Meta(commands.Cog):
     """Handles utilities related to the bot itself."""
@@ -145,7 +144,7 @@ class Meta(commands.Cog):
     async def ping(self, ctx):
         """Replies with the bot latency."""
 
-        timing = round(round(self.bot.latency, 10) * 1000, 2)
+        timing = round(1000*self.bot.latency, 2)
         await ctx.reply(f'Pong. ({timing} ms)')
     
     @commands.command()

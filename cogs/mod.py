@@ -1,6 +1,7 @@
 import datetime
-from collections import defaultdict
+from collections import Counter, defaultdict
 from .utils import checks
+from .utils.paginator import Embed, Pages
 from discord.ext import commands
 import discord
 
@@ -143,7 +144,7 @@ class Mod(commands.Cog):
             author = await ctx.author.create_dm()
             await author.send(update)
 
-    @commands.command(aliases = ['soft'])
+    @commands.command(aliases=['soft'])
     @commands.guild_only()
     @checks.can_ban()
     async def softban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason=None):
@@ -217,7 +218,7 @@ class Mod(commands.Cog):
             author = await ctx.author.create_dm()
             await author.send(update)
     
-    @commands.command()
+    @commands.command(aliases=['add'])
     @commands.guild_only()
     @checks.manage_roles()
     async def give(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], reason=None):
@@ -266,7 +267,7 @@ class Mod(commands.Cog):
             author = await ctx.author.create_dm()
             await author.send(update)
     
-    @commands.command()
+    @commands.command(aliases=['remove'])
     @commands.guild_only()
     @checks.manage_roles()
     async def take(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], reason=None):
@@ -296,10 +297,12 @@ class Mod(commands.Cog):
                 failed_roles += 1
 
         failed_members = 0
+        member_failures = []
         for member in mentions:
             try:
                 await member.remove_roles(*working_roles, reason=full)
             except discord.HTTPException:
+                member_failures.append(member)
                 failed_members += 1
 
         await ctx.reply(f'Removed {len(roles) - failed_roles}/{len(roles)} roles from {len(mentions) - failed_members}/{len(mentions)} members.')
@@ -312,6 +315,28 @@ class Mod(commands.Cog):
 
             author = await ctx.author.create_dm()
             await author.send(update)
+
+    @commands.command(aliases=['clean'])
+    @checks.manage_messages()
+    async def cleanup(self, ctx, mentions: commands.Greedy[discord.Member], limit: int = 100):
+        """Cleans up messages in the channel.
+        
+        If members are mentioned, this commands searches the channel history for messages sent by these members.
+        Otherwise, all messages within the limit are deleted.
+        
+        Members with the Manage Messages permission have a limit of 100 messages.
+        Members with the Manage Server permission have a limit of 1000 messages.
+        
+        The bot must have the Manage Messages permission for this command to run."""
+
+        def check(msg):
+            return msg.author in mentions if mentions else True
+            
+        deleted = await ctx.channel.purge(limit=min(max(0, limit), 1000) if ctx.channel.permissions_for(ctx.author).manage_guild else min(max(0, limit), 100), check=check, before=ctx.message)
+
+        cache = Counter(m.author for m in deleted)
+        
+        await ctx.reply(f'Deleted {sum(cache.values())} messages.\n' + '\n'.join('- '+str(member)+': '+str(number) for member, number in cache.items()))
 
 
 def setup(bot):

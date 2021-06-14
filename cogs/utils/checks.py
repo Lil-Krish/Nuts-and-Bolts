@@ -17,11 +17,6 @@ async def can_set(ctx, user, role):
     else:
         raise commands.BadArgument(f'You cannot execute this action on {role} due to role/server hierarchy.')
 
-def manage_roles():
-    async def wrap(ctx):
-        return await _check_permissions(ctx, {'manage_roles': True})
-    return commands.check(wrap)
-
 def can_ban():
     async def wrap(ctx):
         return await _check_permissions(ctx, {'ban_members': True})
@@ -40,6 +35,16 @@ def is_mod():
 def is_admin():
     async def wrap(ctx):
         return await _check_permissions(ctx, {'administrator': True})
+    return commands.check(wrap)
+
+def manage_messages():
+    async def wrap(ctx):
+        return await _check_permissions(ctx, {'manage_messages': True, 'read_message_history': True})
+    return commands.check(wrap)
+    
+def manage_roles():
+    async def wrap(ctx):
+        return await _check_permissions(ctx, {'manage_roles': True})
     return commands.check(wrap)
 
 async def error_handler(ctx, error):

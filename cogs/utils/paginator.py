@@ -3,7 +3,7 @@ import discord, asyncio
 
 class Embed(discord.Embed):
     def __init__(self, **kwargs):
-        self.title, self.description, self.ctx = kwargs.get('title', None), kwargs.get('description', None), kwargs.get('ctx')
+        self.title, self.description, self.ctx = kwargs.get('title', ''), kwargs.get('description', ''), kwargs.get('ctx', '')
         self.snowflake = 16775930
 
         self.colour = hash(self.ctx.author.roles[-1].colour) if self.ctx.guild else self.snowflake
@@ -26,11 +26,13 @@ class Pages(menus.MenuPages):
 
         info = []
         for (emoji, button) in self.buttons.items():
-            info.append(f'{emoji}: {button.action.__doc__}')
+            info.append(f'{emoji}: {button.action.__doc__.capitalize()}')
 
-        embed.add_field(name='Function of Reactions', value='\n'.join(info), inline=False)
-        embed.set_footer(text=f'We were on {self.current_page + 1}.')
+        embed.add_field(name='Reactions', value='\n'.join(info), inline=False)
+        embed.set_footer(text=f'We were on page {self.current_page + 1}.')
 
+        await self.message.edit(embed=embed)
+        
         async def back():
             await asyncio.sleep(30.0)
             await self.show_page(self.current_page)

@@ -1,7 +1,7 @@
 googletrans==4.0.0rc1
 aiohttp==3.7.4.post0
 pytio==0.3.1
-discord_ext_menus==1.0.0a30+g309c702
+git+https://github.com/Rapptz/discord-ext-menus
 toml==0.10.2
 youtube_search_python==1.4.6
 discord==1.7.3

@@ -3,21 +3,29 @@ import discord, asyncio
 
 class Embed(discord.Embed):
     def __init__(self, **kwargs):
-        self.title, self.description, self.ctx = kwargs.get('title', ''), kwargs.get('description', ''), kwargs.get('ctx', '')
-        self.snowflake = 16775930
-
-        self.colour = hash(self.ctx.author.roles[-1].colour) if self.ctx.guild else self.snowflake
-
-        super().__init__(title=self.title, description=self.description, colour=self.colour)
+        title, description, ctx = kwargs.get('title', ''), kwargs.get('description', ''), kwargs['ctx']
         
-        self.set_author(name=self.ctx.author.display_name, icon_url=self.ctx.author.avatar_url)
+        snowflake = 16775930
+
+        colour = hash(kwargs.get('author', ctx.author).colour)
+
+        if colour == discord.Colour.default():
+            colour = snowflake
+        
+        super().__init__(title=title, description=description, colour=colour)
+        
+        self.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar_url)
+
+    def add_field(self, **kwargs):
+        name, value, inline = kwargs.get('name', '\u200b'), kwargs['value'], kwargs.get('inline', True)
+        super().add_field(name=name, value=value, inline=inline)
 
 
 class Pages(menus.MenuPages):
     def __init__(self, source, context):
         super().__init__(source=source, check_embeds=True, clear_reactions_after=True)
         self.context = context
-
+    
     @menus.button('\N{INFORMATION SOURCE}\ufe0f', position=menus.Last(3))
     async def info(self, payload):
         """Shows info about pagination."""

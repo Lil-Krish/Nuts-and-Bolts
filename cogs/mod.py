@@ -1,6 +1,9 @@
-import datetime
-from collections import Counter, defaultdict
+import asyncio, datetime, aiohttp
+from io import BytesIO
+from PIL import Image, ImageFont, ImageDraw, ImageOps
+from collections import Counter, defaultdict, OrderedDict
 from .utils import checks
+from .utils.file import File
 from .utils.paginator import Embed, Pages
 from discord.ext import commands
 import discord
@@ -12,7 +15,7 @@ class ContentCooldown(commands.CooldownMapping):
 class SpamCheck:
     def __init__(self):
         self.by_content = ContentCooldown.from_cooldown(15, 18.0, commands.BucketType.member)
-        self.new_user = commands.CooldownMapping.from_cooldown(30, 35.0, commands.BucketType.channel)
+        self.new_user = commands.CooldownMapping.from_cooldown(30, 37.0, commands.BucketType.channel)
     
     def is_new(self, member):
         now = datetime.datetime.utcnow()
@@ -61,22 +64,115 @@ class Mod(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self._deleted_messages = {}
         self._spam_check = defaultdict(SpamCheck)
-
+    
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.id in (self.bot.user.id, self.bot.owner_id):
-            return
-        
         checker = self._spam_check[message.guild.id] if message.guild else self._spam_check[message.channel.id]
         if checker.is_spamming(message):
-            await message.channel.send('Spam point reached. You would be banned in a later update.')
+            self.bot.blocked['global'].append(message.author)
+
+            author = await message.author.create_dm()
+            await author.send('You have been blocked from using this bot for 24 hours.')
+    
+    @commands.command()
+    @commands.guild_only()
+    @checks.can_ban()
+    async def block(self, ctx, mentions: commands.Greedy[discord.Member] = []):
+        """Blocks members from using the bot in the server, up to 10 at once.
+
+        The command author will be notified of members who could not be blocked unexpectedly.
+
+        To use this command, you must have the Ban Members permission.
+        """
+        
+        mentions = list(OrderedDict.fromkeys(mentions))
+        if len(mentions) > 10:
+            await ctx.send('You can only block up to 10 members at a time from using the bot.')
+
+        failed = 0
+        command_failures = []
+        errors = (discord.HTTPException, commands.BadArgument)
+
+        mentions = mentions[:10]
+        for member in mentions:
+            if member in self.bot.blocked['global']:
+                continue
+            try:
+                self.bot.blocked[ctx.guild.id].add(member)
+            except errors as error:
+                if (type(error) == errors[0]):
+                    command_failures.append(member)
+                elif (type(error) == errors[1]):
+                    await ctx.reply(error)
+                failed += 1
+            except KeyError:
+                self.bot.blocked[ctx.guild.id] = {member}
+
+        await ctx.reply(f'Blocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
+
+        if command_failures:
+            update = 'These members could not be blocked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
+
+    @commands.command()
+    @commands.guild_only()
+    @checks.can_ban()
+    async def unblock(self, ctx, mentions: commands.Greedy[discord.Member] = []):
+        """Unblocks members from using the bot in the server, up to 10 at once.
+
+        The command author will be notified of members who could not be unblocked unexpectedly.
+
+        To use this command, you must have the Ban Members permission.
+        """
+
+        mentions = list(OrderedDict.fromkeys(mentions))
+        if len(mentions) > 10:
+            await ctx.send('You can only unblock up to 10 members at a time from using the bot.')
+
+        failed = 0
+        command_failures = []
+        errors = (discord.HTTPException, commands.BadArgument)
+
+        mentions = mentions[:10]
+        globally_banned = []
+        for member in mentions:
+            if member in self.bot.blocked['global']:
+                globally_banned.append(member)
+                failed += 1
+                continue
+            try:
+                self.bot.blocked[ctx.guild.id].remove(member)
+            except errors as error:
+                if (type(error) == errors[0]):
+                    command_failures.append(member)
+                elif (type(error) == errors[1]):
+                    await ctx.reply(error)
+                failed += 1
+            except KeyError:
+                pass
+        
+        await ctx.reply(f'Unblocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
+
+        if globally_banned:
+            update = 'These members have been permanently blocked for 24 hours due to spamming: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in globally_banned)
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
+        if command_failures:
+            update = 'These members could not be unblocked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
     
     @commands.command()
     @commands.guild_only()
     @checks.can_kick()
-    async def kick(self, ctx, mentions: commands.Greedy[discord.Member], *, reason=None):
-        """Kicks members from the server.
+    async def kick(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason=None):
+        """Kicks members from the server, up to 10 at once.
 
         The command author will be notified of members who could not be kicked unexpectedly.
 
@@ -85,10 +181,16 @@ class Mod(commands.Cog):
         """
 
         full = await Conversion.add_info(ctx, reason)
+        mentions = list(OrderedDict.fromkeys(mentions))
+
+        if len(mentions) > 10:
+            await ctx.reply('You can only kick up to 10 members at a time.')
 
         failed = 0
         command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
+        
+        mentions = mentions[:10]
         for member in mentions:
             try:
                 await checks.can_use(ctx, ctx.author, member)
@@ -97,13 +199,13 @@ class Mod(commands.Cog):
                 if (type(error) == errors[0]):
                     command_failures.append(member)
                 elif (type(error) == errors[1]):
-                    await ctx.send(error)
+                    await ctx.reply(error)
                 failed += 1
 
         await ctx.reply(f'Kicked {len(mentions) - failed}/{len(mentions)} members.')
 
         if command_failures:
-            update = 'These members could not be kicked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
+            update = 'These members could not be kicked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -111,8 +213,8 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def ban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason=None):
-        """Bans members from the server.
+    async def ban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason=None):
+        """Bans members from the server, up to 10 at once.
 
         The command author will be notified of members who could not be banned unexpectedly.
 
@@ -121,10 +223,16 @@ class Mod(commands.Cog):
         """
 
         full = await Conversion.add_info(ctx, reason)
+        mentions = list(OrderedDict.fromkeys(mentions))
+
+        if len(mentions) > 10:
+            await ctx.reply('You can only ban up to 10 members at a time.')
 
         failed = 0
         command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
+
+        mentions = mentions[:10]
         for member in mentions:
             try:
                 await checks.can_use(ctx, ctx.author, member)
@@ -133,13 +241,13 @@ class Mod(commands.Cog):
                 if (type(error) == errors[0]):
                     command_failures.append(member)
                 elif (type(error) == errors[1]):
-                    await ctx.send(error)
+                    await ctx.reply(error)
                 failed += 1
 
         await ctx.reply(f'Banned {len(mentions) - failed}/{len(mentions)} members.')
 
         if command_failures:
-            update = 'These members could not be banned due to unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
+            update = 'These members could not be banned due to unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -147,8 +255,8 @@ class Mod(commands.Cog):
     @commands.command(aliases=['soft'])
     @commands.guild_only()
     @checks.can_ban()
-    async def softban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason=None):
-        """Softbans members from the server.
+    async def softban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason=None):
+        """Softbans members from the server, up to 10 at once.
 
         Softbanning entails the ban and the immediate unban of a member, effectively kicking them while also removing their messages.
         The command author will be notified of members who could not be softbanned unexpectedly.
@@ -158,10 +266,16 @@ class Mod(commands.Cog):
         """
 
         full = await Conversion.add_info(ctx, reason)
-        
+        mentions = list(OrderedDict.fromkeys(mentions))
+
+        if len(mentions) > 10:
+            await ctx.reply('You can only softban up to 10 members at a time.')
+
         failed = 0
         command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
+
+        mentions = mentions[:10]
         for member in mentions:
             try:
                 await checks.can_use(ctx, ctx.author, member)
@@ -171,13 +285,13 @@ class Mod(commands.Cog):
                 if (type(error) == errors[0]):
                     command_failures.append(member)
                 elif (type(error) == errors[1]):
-                    await ctx.send(error)
+                    await ctx.reply(error)
                 failed += 1
 
         await ctx.reply(f'Softbanned {len(mentions) - failed}/{len(mentions)} members.')
 
         if command_failures:
-            update = 'These members could not be softbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
+            update = 'These members could not be softbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -185,8 +299,8 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def unban(self, ctx, ids: commands.Greedy[int], *, reason=None):
-        """Revokes the ban from members on the server.
+    async def unban(self, ctx, ids: commands.Greedy[int] = [], *, reason=None):
+        """Revokes the ban from members on the server, up to 10 at once.
 
         The command author will be notified of members who could not be unbanned unexpectedly.
 
@@ -195,10 +309,16 @@ class Mod(commands.Cog):
         """
 
         full = await Conversion.add_info(ctx, reason)
-        
+        ids = list(OrderedDict.fromkeys(ids))
+
+        if len(ids) > 10:
+            await ctx.reply('You can only unban up to 10 members at a time.')
+
         failed = 0
         command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
+
+        ids = ids[:10]
         for member_id in ids:
             try:
                 member = await Conversion.get_banned_member(ctx, member_id)
@@ -207,13 +327,13 @@ class Mod(commands.Cog):
                 if (type(error) == errors[0]):
                     unbanned.append(ctx.bot.get_user(member_id))
                 elif (type(error) == errors[1]):
-                    await ctx.send(error)
+                    await ctx.reply(error)
                 failed += 1
 
         await ctx.reply(f'Unbanned {len(ids) - failed}/{len(ids)} members.')
 
         if command_failures:
-            update = 'These members could not be unbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures) if command_failures else None
+            update = 'These members could not be unbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
 
             author = await ctx.author.create_dm()
             await author.send(update)
@@ -221,8 +341,8 @@ class Mod(commands.Cog):
     @commands.command(aliases=['add'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def give(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], reason=None):
-        """Adds roles to members. 
+    async def give(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason=None):
+        """Adds roles to members, up to 10 each. 
         
         Members already with a mentioned role will not be affected.
         The command author will be notified of roles/members who were not affected unexpectedly.
@@ -232,10 +352,16 @@ class Mod(commands.Cog):
         """
 
         full = await Conversion.add_info(ctx, reason)
+        roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
+
+        if len(roles) > 10 or len(mentions) > 10:
+            await ctx.reply('You can only add up to 10 roles to up to 10 members at a time.')
 
         failed_roles = 0
         working_roles, role_failures = [], []
         errors = (discord.HTTPException, commands.BadArgument)
+
+        roles = roles[:10]
         for role in roles:
             try:
                 await checks.can_set(ctx, ctx.author, role)
@@ -244,11 +370,13 @@ class Mod(commands.Cog):
                 if (type(error) == errors[0]):
                     role_failures.append(role)
                 if (type(error) == errors[1]):
-                    await ctx.send(error)
+                    await ctx.reply(error)
                 failed_roles += 1
 
         failed_members = 0
         member_failures = []
+
+        mentions = mentions[:10]
         for member in mentions:
             try:
                 await member.add_roles(*working_roles, reason=full)
@@ -270,8 +398,8 @@ class Mod(commands.Cog):
     @commands.command(aliases=['remove'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def take(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], reason=None):
-        """Takes roles from members. 
+    async def take(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason=None):
+        """Takes roles from members, up to 10 each. 
         
         Members already without a mentioned role will not be affected.
         The command author will be notified of roles/members who were not affected unexpectedly.
@@ -281,10 +409,16 @@ class Mod(commands.Cog):
         """
 
         full = await Conversion.add_info(ctx, reason)
+        roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
+
+        if len(roles) > 10 or len(mentions) > 10:
+            await ctx.reply('You can only remove up to 10 roles to up to 10 members at a time.')
 
         failed_roles = 0
         working_roles, role_failures = [], []
         errors = (discord.HTTPException, commands.BadArgument)
+
+        roles = roles[:10]
         for role in roles:
             try:
                 await checks.can_set(ctx, ctx.author, role)
@@ -293,11 +427,13 @@ class Mod(commands.Cog):
                 if (type(error) == errors[0]):
                     role_failures.append(role)
                 if (type(error) == errors[1]):
-                    await ctx.send(error)
+                    await ctx.reply(error)
                 failed_roles += 1
 
         failed_members = 0
         member_failures = []
+
+        mentions = mentions[:10]
         for member in mentions:
             try:
                 await member.remove_roles(*working_roles, reason=full)
@@ -317,6 +453,7 @@ class Mod(commands.Cog):
             await author.send(update)
 
     @commands.command(aliases=['clean'])
+    @commands.guild_only()
     @checks.manage_messages()
     async def cleanup(self, ctx, mentions: commands.Greedy[discord.Member], limit: int = 100):
         """Cleans up messages in the channel.
@@ -324,20 +461,231 @@ class Mod(commands.Cog):
         If members are mentioned, this commands searches the channel history for messages sent by these members.
         Otherwise, all messages within the limit are deleted.
         
+        Please note that this is a very expensive operation, so it may take a while for messages to be cleaned up.
+
         Members with the Manage Messages permission have a limit of 100 messages.
         Members with the Manage Server permission have a limit of 1000 messages.
         
-        The bot must have the Manage Messages permission for this command to run."""
+        The bot must have the Manage Messages permission for this command to run.
+        """
 
         def check(msg):
             return msg.author in mentions if mentions else True
             
-        deleted = await ctx.channel.purge(limit=min(max(0, limit), 1000) if ctx.channel.permissions_for(ctx.author).manage_guild else min(max(0, limit), 100), check=check, before=ctx.message)
+        manage_guild = ctx.channel.permissions_for(ctx.author).manage_guild
+        max_delete = 1000 if manage_guild else 100
 
-        cache = Counter(m.author for m in deleted)
+        if limit > max_delete:
+            await ctx.reply(f'You can only delete up to {max_delete} messages at once.')
         
-        await ctx.reply(f'Deleted {sum(cache.values())} messages.\n' + '\n'.join('- '+str(member)+': '+str(number) for member, number in cache.items()))
+        async with ctx.channel.typing():
+            deleted = await ctx.channel.purge(limit=min(max(0, limit), max_delete), check=check, before=ctx.message)
 
+            cache = Counter(m.author for m in deleted)
+            
+            response = f'Deleted {sum(cache.values())} messages.\n' + '\n'.join('- '+str(member)+': '+str(number) for member, number in cache.items())
+            try:
+                await ctx.reply(response)
+            except discord.HTTPException:
+                await ctx.send(response)
 
+    @commands.command(aliases=['whois'])
+    @commands.guild_only()
+    async def search(self, ctx, mention: discord.Member = None):
+        """Searches info about a member in the server.
+        
+        Replying with this command will search the referred message author.
+        """
+
+        if mention is None:
+            ref = ctx.message.reference
+            if ref and isinstance(ref.resolved, discord.Message):
+                mention = ref.resolved.author
+            else:
+                mention = ctx.author
+
+        desc = 'User ID: '+str(mention.id)
+        if ctx.guild and mention.nick:
+            desc += '\n'+'Nickname: '+mention.nick
+        
+        attrs = {
+            'online': 'https://i.postimg.cc/Ghvwxrsk/online.png',
+            'idle': 'https://i.postimg.cc/gJ1Q3BzS/idle.png',
+            'dnd': 'https://i.postimg.cc/3wPT9CgW/dnd.png',
+            'offline': 'https://i.postimg.cc/1Xx78nBb/offline.png',
+        }
+
+        small, large = 40, 125
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(attrs[str(mention.status)]) as response:
+                buffer = BytesIO(await response.read())
+                status = Image.open(buffer).resize((small, small)).convert("RGBA")
+        
+        asset = mention.avatar_url_as(size=128)
+        data = BytesIO(await asset.read())
+        profile = Image.open(data).convert('RGBA')
+
+        profile = profile.resize((large, large))
+        profile.paste(status, (large-small, large-small), mask=status)
+
+        embed = Embed(title=str(mention), description=desc, author=mention, ctx=ctx)
+
+        with BytesIO() as binary:
+            profile.save(binary, 'PNG')
+            binary.seek(0)
+            avatar = discord.File(fp=binary, filename='pfp.png')
+        
+        embed.set_thumbnail(url='attachment://pfp.png')
+        embed.add_field(name='Creation Date', value=mention.created_at.strftime('%b %d, %Y'))
+        embed.add_field(name='Join Date', value=mention.joined_at.strftime('%b %d, %Y'))
+        embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in mention.roles[1:6]))
+
+        await ctx.send(file=avatar, embed=embed)
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message):
+        self._deleted_messages[message.channel.id] = message
+
+    @commands.command()
+    @commands.guild_only()
+    async def snipe(self, ctx, channel: discord.TextChannel = None):
+        """Retrieves the most recent deleted message in a channel."""
+
+        if channel is None:
+            channel = ctx.channel
+
+        try:
+            message = self._deleted_messages[channel.id]
+        except KeyError:
+            return await ctx.reply("There's nothing to snipe!")
+
+        embed = Embed(title=f'By {message.author}', ctx=ctx)
+        embed.set_thumbnail(url='https://i.postimg.cc/mg0bg2wz/snipe.png')
+
+        if message.content:
+            embed.add_field(name='Content', value=f'{message.content}')
+        if message.attachments:
+            embed.add_field(name='Top Attachments', value='\n'.join(f'[{attachment.filename}]({attachment.url})' for attachment in message.attachments[:5]), inline=False)
+
+        await ctx.send(embed=embed)
+    
+    @commands.command()
+    @commands.guild_only()
+    @checks.is_admin()
+    async def nuke(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason=None):
+        """Deletes and clones text channels in the server, up to 5 at once.
+        
+        This will effectively delete all messages in mentioned text channels.
+        This action is not reversible and requires authentication to proceed.
+        The command author will be notified of channels that were not deleted unexpectedly.
+
+        To use this command, you must have the Administrator permission.
+        The bot must have the Manage Server permission for this command to run.
+        """
+        full = await Conversion.add_info(ctx, reason)
+
+        if channels is None:
+            channels = [ctx.channel]
+
+        channels = list(OrderedDict.fromkeys(channels))
+
+        if len(channels) > 5:
+            await ctx.reply('You can only nuke up to 5 channels at a time.')
+            await ctx.reply('Please type the names of the first five channels to be nuked to confirm this action.')
+        else:
+            await ctx.reply('Please type the names of the channels to be nuked to confirm this action.')
+
+        channels = channels[:5]
+
+        def check(m):
+            return (m.channel == ctx.channel and 
+                    m.author == ctx.author and
+                    (m.content == '\n'.join(channel.name for channel in channels) or 
+                    m.content == ' '.join(channel.name for channel in channels)))
+
+        try:
+            confirm = await self.bot.wait_for('message', check=check, timeout=15*len(channels))
+        except asyncio.TimeoutError:
+            try:
+                return await ctx.reply('Command aborted.')
+            except discord.HTTPException:
+                return await ctx.send('Command aborted.')
+
+        failed = index = receiver = 0
+        command_failures = []
+        for channel in channels:
+            try:
+                await channel.delete(reason=full)
+                new = await channel.clone(reason=full)
+                if (index == 0):
+                    receiver = new
+                index += 1
+            except errors as error:
+                command_failures.append(channel)
+                failed += 1
+        
+        try:
+            await ctx.reply(f'Nuked {len(channels) - failed}/{len(channels)} channels.')
+        except discord.HTTPException:
+            await receiver.send(f'Nuked {len(channels) - failed}/{len(channels)} channels.')
+
+        if command_failures:
+            update = 'These channels could not be nuked due to unexpected reasons: \n' + '\n'.join(str(channel)+' ||(ID: '+str(channel.id)+')||' for channel in command_failures) if command_failures else None
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
+    
+    @commands.command(aliases=['mega'])
+    @commands.guild_only()
+    @checks.is_owner()
+    async def meganuke(self, ctx, reason=None):
+        """Deletes and clones all text channels in the server.
+        
+        This will effectively delete all messages in all text channels.
+        This action is not reversible and requires authentication to proceed.
+        The command author will be notified of channels that were not deleted unexpectedly.
+
+        To use this command, you must be the owner of the server.
+        The bot must have the Manage Server permission for this command to run.
+        """
+        full = await Conversion.add_info(ctx, reason)
+
+        def check(m):
+            return (m.channel == ctx.channel and 
+                    m.author == ctx.author and
+                    (m.content == ctx.guild.name))
+
+        await ctx.reply('Please type the name of the server to be meganuked to confirm this action.')
+        try:
+            confirm = await self.bot.wait_for('message', check=check, timeout=15)
+        except asyncio.TimeoutError:
+            try:
+                return await ctx.reply('Command aborted.')
+            except discord.HTTPException:
+                return await ctx.send('Command aborted.')
+
+        failed = index = receiver = 0
+        command_failures = []
+        for channel in ctx.guild.text_channels:
+            try:
+                await channel.delete(reason=full)
+                new = await channel.clone(reason=full)
+                if (index == 0):
+                    receiver = new
+                index += 1
+            except errors as error:
+                command_failures.append(channel)
+                failed += 1
+        
+        await receiver.send(f'Meganuked server. ({len(ctx.guild.text_channels) - failed}/{len(ctx.guild.text_channels)} channels.)')
+
+        if command_failures:
+            update = 'These channels could not be nuked due to unexpected reasons: \n' + '\n'.join(str(channel)+' ||(ID: '+str(channel.id)+')||' for channel in command_failures) if command_failures else None
+
+            author = await ctx.author.create_dm()
+            await author.send(update)
+
+      
 def setup(bot):
     bot.add_cog(Mod(bot))

@@ -37,6 +37,11 @@ def is_admin():
         return await _check_permissions(ctx, {'administrator': True})
     return commands.check(wrap)
 
+def is_owner():
+    def wrap(ctx):
+        return ctx.guild is not None and ctx.guild.owner == ctx.author
+    return commands.check(wrap)
+
 def manage_messages():
     async def wrap(ctx):
         return await _check_permissions(ctx, {'manage_messages': True, 'read_message_history': True})
@@ -50,20 +55,17 @@ def manage_roles():
 async def error_handler(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         pass
-    elif isinstance(error, commands.BadArgument):
-        await ctx.send(error)
     elif isinstance(error, commands.CommandInvokeError):
         original = error.original
         if isinstance(original, discord.Forbidden):
-            await ctx.send('The bot does not have permission to execute this command.')
+            await ctx.reply('The bot does not have permission to execute this command.')
         elif isinstance(original, discord.NotFound):
-            await ctx.send(f'This does not exist: {original.text}')
+            await ctx.reply(f'This does not exist: {original.text}')
         elif isinstance(original, discord.HTTPException):
-            print(error) # await ctx.send('An unexpected error occurred. Please try again later.')
+            await ctx.reply('An unexpected error occurred. Please try again later.')
         else:
-            await ctx.send(error.original)
+            await ctx.reply(error.original)
     elif isinstance(error, commands.CheckFailure):
-        await ctx.send('You do not have permission to execute this command.')
+        await ctx.reply('You do not have permission to execute this command.')
     else:
-        print(type(error))
-        await ctx.send(error)
+        await ctx.reply(f'{error.__class__.__name__}: {error}')

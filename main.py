@@ -5,7 +5,8 @@ import discord
 
 initial_extensions = {
     'cogs.meta',
-    'cogs.mod'
+    'cogs.mod',
+    'cogs.api',
 }
 
 class NutsandBolts(commands.AutoShardedBot):
@@ -20,13 +21,26 @@ class NutsandBolts(commands.AutoShardedBot):
         
         self.closed = toml.load('closed.toml')
         
-        self.owner_id, self.token = self.closed['owner_id'], self.closed['token']
+        self.owner_id, self._token = self.closed['owner_id'], self.closed['token']
 
+        self.blocked = {'global' : set()}
+
+    async def on_message(self, message):
+        if message.guild:
+            blocked = message.author in self.blocked['global'].union(self.blocked.get(message.guild.id, set()))
+        else:
+            blocked = message.author in self.blocked['global']
+        
+        if message.author.bot or blocked:
+            return
+
+        await self.process_commands(message)
+        
     async def on_command_error(self, ctx, error):
         await checks.error_handler(ctx, error)
     
     def run(self):
-        super().run(self.token, reconnect=True)
+        super().run(self._token, reconnect=True)
 
 
 def main():

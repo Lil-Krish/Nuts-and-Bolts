@@ -29,7 +29,7 @@ class HelpPageSource(menus.ListPageSource):
         return short_doc + ' '.join(page)
 
     async def format_page(self, menu, cogs):
-        description = f'Use `?help [command|category]` for more info on a command or category.\n'
+        description = f'Use `?help command` for more info on a command group.\n'
 
         embed = Embed(title='Categories', description=description, ctx=self.context)
         
@@ -40,7 +40,8 @@ class HelpPageSource(menus.ListPageSource):
                 embed.add_field(name=cog.qualified_name, value=value, inline=True)
 
         max_pages = self.get_max_pages()
-        embed.set_footer(text=f'Page {menu.current_page + 1}/{max_pages}')
+        if max_pages > 1:
+            embed.set_footer(text=f'Page {menu.current_page + 1}/{max_pages}')
         return embed
 
 
@@ -97,16 +98,16 @@ class Help(commands.HelpCommand):
         menu = Pages(HelpPageSource(self, all_commands, self.context), self.context)
         await menu.start(self.context)
 
+    def command_formatting(self, embed, command):
+        embed.title = self.get_command_signature(command)
+        embed.description = command.help
+        embed.set_footer(text="Use ?help to view a list of all commands.")
+        
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
         
         menu = Pages(GroupPageSource(cog, entries, self.context), self.context)
         await menu.start(self.context)
-
-    def command_formatting(self, embed, command):
-        embed.title = self.get_command_signature(command)
-        embed.description = command.help
-        embed.set_footer(text="Use ?help to view a list of all commands.")
 
     async def send_group_help(self, group):
         sub = group.commands
@@ -149,8 +150,8 @@ class Meta(commands.Cog):
     
     @commands.command()
     @commands.dm_only()
-    @commands.cooldown(1, 60, commands.BucketType.member)
-    async def suggest(self, ctx, *, suggestion: str):
+    @commands.cooldown(rate=1, per=60.0, type=commands.BucketType.member)
+    async def suggest(self, ctx, *, suggestion):
         """Requests the developer to fix or add a feature to the bot.
         
         Please only use this command for the above purpose. 

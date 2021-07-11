@@ -1,8 +1,7 @@
 name: Cache
 
 on:
-  push:
-    branches: [ main ]
+  deployment
 
 jobs:
   build:

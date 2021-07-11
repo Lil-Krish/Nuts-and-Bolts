@@ -1,4 +1,4 @@
-import toml
+import os
 from cogs.utils import checks
 from discord.ext import commands
 import discord
@@ -19,9 +19,7 @@ class NutsandBolts(commands.AutoShardedBot):
         for extension in initial_extensions:
             self.load_extension(extension)
         
-        self.closed = toml.load('closed.toml')
-        
-        self.owner_id, self._token = self.closed['owner_id'], self.closed['token']
+        self.owner_id, self._token = os.environ['OWNER_ID'], os.environ['TOKEN']
 
         self.blocked = {'global' : set()}
 

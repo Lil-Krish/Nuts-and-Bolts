@@ -1,0 +1,17 @@
+name: Cache
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache Token
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: |

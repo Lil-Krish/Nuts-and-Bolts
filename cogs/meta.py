@@ -158,8 +158,8 @@ class Meta(commands.Cog):
         You can only give feedback once a minute. Misuse will lead to a blacklist.
         """
 
-        owner = await self.bot.get_user(self.bot.owner_id).create_dm()
-
+        owner = self.bot.get_user(self.bot.owner_id)
+        
         await owner.send(f'{ctx.author} suggested "{suggestion}".')
         await ctx.send('Your suggestion has been recorded.')
     

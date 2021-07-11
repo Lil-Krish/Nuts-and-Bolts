@@ -17,7 +17,7 @@ class Embed(discord.Embed):
         self.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar_url)
 
     def add_field(self, **kwargs):
-        name, value, inline = kwargs.get('name', '\u200b'), kwargs['value'], kwargs.get('inline', True)
+        name, value, inline = kwargs.get('name', '\u200b'), kwargs.get('value', '\u200b'), kwargs.get('inline', True)
         super().add_field(name=name, value=value, inline=inline)
 
 

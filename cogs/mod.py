@@ -1,9 +1,8 @@
-import asyncio, datetime, aiohttp
+import datetime, aiohttp
 from io import BytesIO
 from PIL import Image, ImageFont, ImageDraw, ImageOps
 from collections import Counter, defaultdict, OrderedDict
 from .utils import checks
-from .utils.file import File
 from .utils.paginator import Embed, Pages
 from discord.ext import commands
 import discord
@@ -66,15 +65,13 @@ class Mod(commands.Cog):
         self.bot = bot
         self._deleted_messages = {}
         self._spam_check = defaultdict(SpamCheck)
-    
+
     @commands.Cog.listener()
     async def on_message(self, message):
         checker = self._spam_check[message.guild.id] if message.guild else self._spam_check[message.channel.id]
         if checker.is_spamming(message):
             self.bot.blocked['global'].append(message.author)
-
-            author = await message.author.create_dm()
-            await author.send('You have been blocked from using this bot for 24 hours.')
+            await message.author.send('You have been blocked from using this bot for 24 hours.')
     
     @commands.command()
     @commands.guild_only()
@@ -113,10 +110,8 @@ class Mod(commands.Cog):
         await ctx.reply(f'Blocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
 
         if command_failures:
-            update = 'These members could not be blocked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            update = 'These members could not be blocked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
+            await ctx.author.send(update)
 
     @commands.command()
     @commands.guild_only()
@@ -158,15 +153,12 @@ class Mod(commands.Cog):
         await ctx.reply(f'Unblocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
 
         if globally_banned:
-            update = 'These members have been permanently blocked for 24 hours due to spamming: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in globally_banned)
+            update = 'These members have been permanently blocked for 24 hours for spamming: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in globally_banned)
+            await ctx.author.send(update)
 
-            author = await ctx.author.create_dm()
-            await author.send(update)
         if command_failures:
-            update = 'These members could not be unblocked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            update = 'These members could not be unblocked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
+            await ctx.author.send(update)
     
     @commands.command()
     @commands.guild_only()
@@ -205,10 +197,8 @@ class Mod(commands.Cog):
         await ctx.reply(f'Kicked {len(mentions) - failed}/{len(mentions)} members.')
 
         if command_failures:
-            update = 'These members could not be kicked due to unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            update = 'These members could not be kicked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
+            await ctx.author.send(update)
 
     @commands.command()
     @commands.guild_only()
@@ -247,10 +237,8 @@ class Mod(commands.Cog):
         await ctx.reply(f'Banned {len(mentions) - failed}/{len(mentions)} members.')
 
         if command_failures:
-            update = 'These members could not be banned due to unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            update = 'These members could not be banned for unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
+            await ctx.author.send(update)
 
     @commands.command(aliases=['soft'])
     @commands.guild_only()
@@ -292,9 +280,7 @@ class Mod(commands.Cog):
 
         if command_failures:
             update = 'These members could not be softbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            await ctx.author.send(update)
 
     @commands.command()
     @commands.guild_only()
@@ -334,9 +320,7 @@ class Mod(commands.Cog):
 
         if command_failures:
             update = 'These members could not be unbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            await ctx.author.send(update)
     
     @commands.command(aliases=['add'])
     @commands.guild_only()
@@ -391,9 +375,7 @@ class Mod(commands.Cog):
 
         if role_update or member_update:
             update = str(role_update or '') + '\n' + str(member_update or '')
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            await ctx.author.send(update)
     
     @commands.command(aliases=['remove'])
     @commands.guild_only()
@@ -448,12 +430,11 @@ class Mod(commands.Cog):
 
         if role_update or member_update:
             update = str(role_update or '') + '\n' + str(member_update or '')
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
+            await ctx.author.send(update)
 
     @commands.command(aliases=['clean'])
     @commands.guild_only()
+    @commands.cooldown(rate=1, per=5.0, type=commands.BucketType.member)
     @checks.manage_messages()
     async def cleanup(self, ctx, mentions: commands.Greedy[discord.Member], limit: int = 100):
         """Cleans up messages in the channel.
@@ -462,6 +443,7 @@ class Mod(commands.Cog):
         Otherwise, all messages within the limit are deleted.
         
         Please note that this is a very expensive operation, so it may take a while for messages to be cleaned up.
+        As a result, you can only cleanup messages once every 5 seconds.
 
         Members with the Manage Messages permission have a limit of 100 messages.
         Members with the Manage Server permission have a limit of 1000 messages.
@@ -573,16 +555,15 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.is_admin()
-    async def nuke(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason=None):
-        """Deletes and clones text channels in the server, up to 5 at once.
+    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason=None):
+        """Clones text channels in the server, including permissions, up to 5 at once.
         
-        This will effectively delete all messages in mentioned text channels.
-        This action is not reversible and requires authentication to proceed.
-        The command author will be notified of channels that were not deleted unexpectedly.
+        The command author will be notified of channels that were not cloned unexpectedly.
 
-        To use this command, you must have the Administrator permission.
+        To use this command, you must have the Manage Server permission.
         The bot must have the Manage Server permission for this command to run.
         """
+
         full = await Conversion.add_info(ctx, reason)
 
         if channels is None:
@@ -591,26 +572,9 @@ class Mod(commands.Cog):
         channels = list(OrderedDict.fromkeys(channels))
 
         if len(channels) > 5:
-            await ctx.reply('You can only nuke up to 5 channels at a time.')
-            await ctx.reply('Please type the names of the first five channels to be nuked to confirm this action.')
-        else:
-            await ctx.reply('Please type the names of the channels to be nuked to confirm this action.')
-
+            await ctx.reply('You can only clone up to 5 channels at a time.')
+        
         channels = channels[:5]
-
-        def check(m):
-            return (m.channel == ctx.channel and 
-                    m.author == ctx.author and
-                    (m.content == '\n'.join(channel.name for channel in channels) or 
-                    m.content == ' '.join(channel.name for channel in channels)))
-
-        try:
-            confirm = await self.bot.wait_for('message', check=check, timeout=15*len(channels))
-        except asyncio.TimeoutError:
-            try:
-                return await ctx.reply('Command aborted.')
-            except discord.HTTPException:
-                return await ctx.send('Command aborted.')
 
         failed = index = receiver = 0
         command_failures = []
@@ -625,67 +589,12 @@ class Mod(commands.Cog):
                 command_failures.append(channel)
                 failed += 1
         
-        try:
-            await ctx.reply(f'Nuked {len(channels) - failed}/{len(channels)} channels.')
-        except discord.HTTPException:
-            await receiver.send(f'Nuked {len(channels) - failed}/{len(channels)} channels.')
+        await ctx.reply(f'Cloned {len(channels) - failed}/{len(channels)} channels.')
 
         if command_failures:
-            update = 'These channels could not be nuked due to unexpected reasons: \n' + '\n'.join(str(channel)+' ||(ID: '+str(channel.id)+')||' for channel in command_failures) if command_failures else None
+            update = 'These channels could not be cloned for unexpected reasons: \n' + '\n'.join(str(channel)+' ||(ID: '+str(channel.id)+')||' for channel in command_failures)
+            await ctx.author.send(update)
 
-            author = await ctx.author.create_dm()
-            await author.send(update)
-    
-    @commands.command(aliases=['mega'])
-    @commands.guild_only()
-    @checks.is_owner()
-    async def meganuke(self, ctx, reason=None):
-        """Deletes and clones all text channels in the server.
-        
-        This will effectively delete all messages in all text channels.
-        This action is not reversible and requires authentication to proceed.
-        The command author will be notified of channels that were not deleted unexpectedly.
 
-        To use this command, you must be the owner of the server.
-        The bot must have the Manage Server permission for this command to run.
-        """
-        full = await Conversion.add_info(ctx, reason)
-
-        def check(m):
-            return (m.channel == ctx.channel and 
-                    m.author == ctx.author and
-                    (m.content == ctx.guild.name))
-
-        await ctx.reply('Please type the name of the server to be meganuked to confirm this action.')
-        try:
-            confirm = await self.bot.wait_for('message', check=check, timeout=15)
-        except asyncio.TimeoutError:
-            try:
-                return await ctx.reply('Command aborted.')
-            except discord.HTTPException:
-                return await ctx.send('Command aborted.')
-
-        failed = index = receiver = 0
-        command_failures = []
-        for channel in ctx.guild.text_channels:
-            try:
-                await channel.delete(reason=full)
-                new = await channel.clone(reason=full)
-                if (index == 0):
-                    receiver = new
-                index += 1
-            except errors as error:
-                command_failures.append(channel)
-                failed += 1
-        
-        await receiver.send(f'Meganuked server. ({len(ctx.guild.text_channels) - failed}/{len(ctx.guild.text_channels)} channels.)')
-
-        if command_failures:
-            update = 'These channels could not be nuked due to unexpected reasons: \n' + '\n'.join(str(channel)+' ||(ID: '+str(channel.id)+')||' for channel in command_failures) if command_failures else None
-
-            author = await ctx.author.create_dm()
-            await author.send(update)
-
-      
 def setup(bot):
     bot.add_cog(Mod(bot))

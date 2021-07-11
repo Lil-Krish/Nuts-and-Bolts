@@ -4,9 +4,9 @@ from discord.ext import commands
 import discord
 
 initial_extensions = {
+    'cogs.api',
     'cogs.meta',
     'cogs.mod',
-    'cogs.api',
 }
 
 class NutsandBolts(commands.AutoShardedBot):
@@ -14,8 +14,8 @@ class NutsandBolts(commands.AutoShardedBot):
         intents = discord.Intents.all()
         activity = discord.Activity(type=discord.ActivityType.watching, name="for ?help")
         
-        super().__init__(command_prefix='?', activity=activity, intents=intents)
-        
+        super().__init__(command_prefix=commands.when_mentioned_or('?'), activity=activity, intents=intents)
+
         for extension in initial_extensions:
             self.load_extension(extension)
         

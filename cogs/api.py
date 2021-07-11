@@ -142,7 +142,6 @@ class API(commands.Cog):
             if language in value[0]:
                 access = key
                 break
-
             idx += 1
         
         if idx == len(attrs):

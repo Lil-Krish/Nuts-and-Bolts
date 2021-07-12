@@ -9,7 +9,7 @@ class Embed(discord.Embed):
 
         colour = hash(kwargs.get('author', ctx.author).colour)
 
-        if colour == discord.Colour.default():
+        if colour == hash(discord.Colour.default()):
             colour = snowflake
         
         super().__init__(title=title, description=description, colour=colour)

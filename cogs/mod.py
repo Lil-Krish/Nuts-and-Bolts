@@ -554,7 +554,7 @@ class Mod(commands.Cog):
     
     @commands.command()
     @commands.guild_only()
-    @checks.is_admin()
+    @checks.is_mod()
     async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason=None):
         """Clones text channels in the server, including permissions, up to 5 at once.
         
@@ -576,15 +576,11 @@ class Mod(commands.Cog):
         
         channels = channels[:5]
 
-        failed = index = receiver = 0
+        failed = 0
         command_failures = []
         for channel in channels:
             try:
-                await channel.delete(reason=full)
                 new = await channel.clone(reason=full)
-                if (index == 0):
-                    receiver = new
-                index += 1
             except errors as error:
                 command_failures.append(channel)
                 failed += 1

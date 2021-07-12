@@ -172,11 +172,11 @@ class API(commands.Cog):
         if result.error:
             if len(result.error) > 1024:
                 return await ctx.reply('Error message is too long to be displayed.')
-            embed.add_field(name='Error', value='```'+result.error[:cut-2]+'```')
+            embed.add_field(name='Error', value='```\n'+result.error[:cut-2]+'```')
         else:
             if len(result.result) > 1024:
                 return await ctx.reply('Standard output is too long to be displayed.')
-            embed.add_field(name='Standard Output', value='```'+result.result+'```')
+            embed.add_field(name='Standard Output', value='```\n'+result.result+'```')
 
         await ctx.send(embed=embed)
 

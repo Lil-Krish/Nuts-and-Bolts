@@ -109,7 +109,7 @@ class API(commands.Cog):
         await ctx.reply(file=discord.File(generated, filename='latex.png'))
 
     @commands.command()
-    async def run(self, ctx, language, *, code=None):
+    async def run(self, ctx, language='py', *, code=None):
         """Runs code with the Try It Online interpreter.
         
         Languages currently supported: Python 3, C, C++, C#, Java, Javascript, Rust, and PHP.
@@ -127,7 +127,7 @@ class API(commands.Cog):
         instance = Tio()
 
         attrs = {
-            'python3' : (('py', 'python'), 'https://i.postimg.cc/s21LPtxY/python.png'),
+            'python3' : (('py3', 'py', 'python3', 'python'), 'https://i.postimg.cc/s21LPtxY/python.png'),
             'c-gcc' : (('c'), 'https://i.postimg.cc/vZZ2MpWJ/c.png'),
             'cpp-gcc' : (('cpp', 'c++'), 'https://i.postimg.cc/YSVsdbLJ/cpp.png'),
             'cs-csc' : (('cs', 'csharp', 'c#'), 'https://i.postimg.cc/FFbMX1DV/csharp.png'),
@@ -145,7 +145,7 @@ class API(commands.Cog):
             idx += 1
         
         if idx == len(attrs):
-            return await ctx.reply('That language is not currently supported.')
+            return await ctx.reply('This language is not currently supported.')
         
         request = TioRequest(lang=access, code=code)
         result = await self.loop.run_in_executor(None, instance.send, request)

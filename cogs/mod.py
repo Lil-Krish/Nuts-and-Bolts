@@ -502,7 +502,7 @@ class Mod(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get(attrs[str(mention.status)]) as response:
                 buffer = BytesIO(await response.read())
-                status = Image.open(buffer).resize((small, small)).convert("RGBA")
+                status = Image.open(buffer).resize((small, small)).convert('RGBA')
         
         asset = mention.avatar_url_as(size=128)
         data = BytesIO(await asset.read())

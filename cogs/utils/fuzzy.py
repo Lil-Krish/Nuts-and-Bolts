@@ -13,7 +13,7 @@ def _quick_ratio(one, two):
     return int(round(100 * pair.quick_ratio())) > _lower_bound
 
 def _partial_ratio(one, two):
-    sh, lo = (one, two) if len(one) <= len(two) else (b, a)
+    sh, lo = (one, two) if len(one) <= len(two) else (two, one)
     pair = SequenceMatcher(None, sh, lo)
 
     blocks = pair.get_matching_blocks()
@@ -33,7 +33,7 @@ _word_regex = re.compile(r'\W', re.IGNORECASE)
 
 def _sort_tokens(phrase):
     phrase = _word_regex.sub(' ', phrase).lower().strip()
-    return ' '.join(sorted(phrase.split())) > _lower_bound
+    return ' '.join(sorted(phrase.split()))
 
 def _token_sort_ratio(one, two):
     one, two = _sort_tokens(one), _sort_tokens(two)
@@ -51,19 +51,32 @@ def _fuzzy_test(one, two):
     return (_ratio(one, two) or _quick_ratio(one, two) or _partial_ratio(one, two)
             or _token_sort_ratio(one, two) or _quick_token_sort_ratio(one, two) or _partial_token_sort_ratio(one, two))
 
-def _finder(text, collection, key=None, locale=None):
-    extract = collection[key] if key else collection
+def _collect(text, data, store):
+    for item in data:
+        for element in item[0]:
+            if text == element:
+                return [True, item]
+            if _fuzzy_test(text, element):
+                if len(store) < 10:
+                    store.append(element)
+    return False
     
-    suggestions = []
-    for item in extract:
-        to_search = item[locale] if locale else item
-        if _fuzzy_test(text, search):
-            suggestions.append(to_search)
-        
-    return suggestions
-
-def find(text, collection, key=None, locale=None):
-    try:
-        return _finder(text, collection, key, locale)
-    except (IndexError, KeyError):
-        return None
+def find(text, collection, key=None):
+    found = []
+    if not collection:
+        return [False, found]
+    
+    if key:
+        extract = collection[key]
+        new = _collect(text, extract, found)
+        if new:
+            new.append(key)
+            return new
+        return [False, found]
+    
+    for key, value in collection.items():
+        new = _collect(text, value, found)
+        if new:
+            new.append(key)
+            return new
+    return [False, found]

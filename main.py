@@ -7,6 +7,7 @@ initial_extensions = {
     'cogs.api',
     'cogs.meta',
     'cogs.mod',
+    'cogs.tags',
 }
 
 class NutsandBolts(commands.AutoShardedBot):

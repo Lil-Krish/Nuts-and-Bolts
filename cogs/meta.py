@@ -29,7 +29,7 @@ class HelpPageSource(menus.ListPageSource):
         return short_doc + ' '.join(page)
 
     async def format_page(self, menu, cogs):
-        description = f'Use `?help command` for more info on a command group.\n'
+        description = f'Use `?help [command]` for more info on a command group.\n'
 
         embed = Embed(title='Categories', description=description, ctx=self.context)
         
@@ -101,7 +101,7 @@ class Help(commands.HelpCommand):
     def command_formatting(self, embed, command):
         embed.title = self.get_command_signature(command)
         embed.description = command.help
-        embed.set_footer(text="Use ?help to view a list of all commands.")
+        embed.set_footer(text='Use ?help to view a list of all commands.')
         
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
@@ -118,7 +118,11 @@ class Help(commands.HelpCommand):
         if len(entries) == 0:
             return await self.send_command_help(group)
 
-        menu = Pages(GroupPageSource(group, entries, self.context), self.context)
+        source = GroupPageSource(group, entries, self.context)
+        source.title = self.get_command_signature(group)
+        source.description = group.help
+
+        menu = Pages(source, self.context)
         await menu.start(self.context)
 
     async def send_command_help(self, command):

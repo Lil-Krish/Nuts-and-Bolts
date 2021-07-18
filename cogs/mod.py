@@ -437,9 +437,17 @@ class Mod(commands.Cog):
         async with ctx.channel.typing():
             deleted = await ctx.channel.purge(limit=min(max(0, limit), max_delete), check=check, before=ctx.message)
 
-            cache = Counter(m.author for m in deleted)
+            cache = list(Counter(m.author for m in deleted).items())
+
+            total = last = 0
+            for data in cache:
+                total += len(str(data[0]))+len(str(data[1]))+5
+                if total > 1900:
+                    idx = cache.index(data)
+                    cache = cache[:idx]
+                    break
             
-            response = f'Deleted {sum(cache.values())} messages.\n' + '\n'.join('- '+str(member)+': '+str(number) for member, number in cache.items())
+            response = f'Deleted {sum(number for _, number in cache)} messages.\n' + '\n'.join('- '+str(member)+': '+str(number) for member, number in cache)
             try:
                 await ctx.reply(response)
             except discord.HTTPException:

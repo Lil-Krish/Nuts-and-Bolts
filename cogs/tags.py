@@ -95,7 +95,7 @@ class Tags(commands.Cog):
         except KeyError:
             self._tags[ctx.guild.id][ctx.author.id] = [[[name], content, ctx.author]]
 
-        await ctx.reply('Tag created.')
+        await ctx.reply(f'Tag "{name}" created.')
 
     @tag.command()
     @commands.guild_only()

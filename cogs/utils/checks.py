@@ -55,12 +55,12 @@ def manage_roles():
 async def error_handler(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         pass
+    elif isinstance(error, commands.BadArgument):
+        await ctx.reply(error)
     elif isinstance(error, commands.CommandInvokeError):
         original = error.original
         if isinstance(original, discord.Forbidden):
             await ctx.reply('The bot does not have permission to execute this command.')
-        elif isinstance(original, discord.NotFound):
-            await ctx.reply(f'This does not exist: {original.text}')
         elif isinstance(original, discord.HTTPException):
             await ctx.reply('An unexpected error occurred. Please try again later.')
         else:

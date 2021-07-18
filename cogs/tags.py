@@ -1,7 +1,62 @@
 from collections import defaultdict
 from .utils import fuzzy
+from .utils.paginator import Embed, Pages
 import discord
-from discord.ext import commands
+from discord.ext import commands, menus
+
+class TagNotFound(Exception):
+    def __init__(self, name, tags=None):
+        self.name = name
+        self.tags = tags
+    
+    def __str__(self):
+        if self.tags:
+            total = 0
+            for idx in range(len(self.tags[1])):
+                total += len(self.tags[1][idx])
+                if total > 1900:
+                    self.tags = self.tags[1][:idx]
+            
+            if len(self.tags[1]):
+                return f'Tag "{self.name}" not found. Did you mean...\n'+'\n'.join(tag for tag in self.tags[1])
+        return f'Tag "{self.name}" not found.'
+
+
+class TagName(commands.Converter):
+    async def convert(self, ctx, argument: commands.clean_content):
+        if len(argument) > 50:
+            raise commands.BadArgument(f'{len(argument)} character tag name/alias is too long (50 character max).')
+
+        root = ctx.bot.get_command('tag')
+        if argument.split()[0] in root.all_commands:
+            raise commands.BadArgument(f'{argument} tag name/alias starts with a reserved word.')
+        return argument
+
+
+class TagContent(commands.Converter):
+    async def convert(self, ctx, argument: commands.clean_content):
+        if len(argument) > 1000:
+            raise commands.BadArgument(f'{len(argument)} character tag content is too long (1000 character max).')
+        return argument
+
+
+class TagPageSource(menus.ListPageSource):
+    def __init__(self, data, author, context):
+        super().__init__(entries=sorted(data, key=lambda d: d[0][0]), per_page=5)
+        self.author = author
+        self.context = context
+    
+    async def format_page(self, menu, entries):
+        description = f'By {self.author}'
+        embed = Embed(title=f'Tags by {self.author}', author=self.author, ctx=self.context)
+        for tag in entries:
+            embed.add_field(name=tag[0][0], value=tag[1], inline=False)
+
+        max_pages = self.get_max_pages()
+        if max_pages > 1:
+            embed.set_footer(text=f'Page {menu.current_page + 1}/{max_pages}')
+        return embed
+
 
 class Tags(commands.Cog):
     """Tag related commands."""
@@ -12,46 +67,26 @@ class Tags(commands.Cog):
     
     @commands.group(invoke_without_command=True)
     @commands.guild_only()
-    async def tag(self, ctx, *, name: commands.clean_content):
+    async def tag(self, ctx, *, name: TagName):
         """Allows you to tag text for later retrieval."""
         
         check = self._tags[ctx.guild.id]
-        if not check:
-            return await ctx.reply("Tag not found.")
-        
         match = fuzzy.find(name, check)
-
         if not match[0]:
-            total = 0
-            for idx in range(len(match[1])):
-                total += len(match[1][idx])
-                if total > 1900:
-                    match = match[1][:idx]
-            
-            if len(match[1]):
-                return await ctx.reply('Tag not found. Did you mean...\n'+'\n'.join(tag for tag in match[1]))
-            await ctx.reply('Tag not found.')
+            raise TagNotFound(name, match)
         
         ref = ctx.message.reference
         if ref and isinstance(ref.resolved, discord.Message):
             return await ref.resolved.reply(match[1][1])
         await ctx.reply(match[1][1])
     
-    @tag.command(aliases=['add'])
+    @tag.command(aliases=['add', 'make'])
     @commands.guild_only()
-    async def create(self, ctx, name: commands.clean_content, *, content: commands.clean_content):
+    async def create(self, ctx, name: TagName, *, content: TagContent):
         """Creates a new server-wide tag."""
-
-        if len(name) > 50:
-            raise commands.BadArgument(f'{len(name)} character tag name is too long (50 character max).')
-
-        root = self.bot.get_command('tag')
-        if name.split()[0] in root.all_commands:
-            raise commands.BadArgument('The name of this tag starts with a reserved word.')
 
         check = self._tags[ctx.guild.id]
         match = fuzzy.find(name, check)
-
         if match[0]:
             return await ctx.reply('This tag already exists.')
 
@@ -64,32 +99,14 @@ class Tags(commands.Cog):
 
     @tag.command()
     @commands.guild_only()
-    async def alias(self, ctx, old_name: commands.clean_content, new_name: commands.clean_content):
-        """Creates a server-wide alias for a already existing tag."""
-
-        if len(new_name) > 50:
-            raise commands.BadArgument(f'{len(new_name)} character tag alias is too long (50 character max).')
-
-        root = self.bot.get_command('tag')
-        if new_name.split()[0] in root.all_commands:
-            raise commands.BadArgument('This tag alias starts with a reserved word.')
+    async def alias(self, ctx, old_name: TagName, new_name: TagName):
+        """Creates a server-wide alias for an already existing tag."""
 
         check = self._tags[ctx.guild.id]
-        if not check:
-            return await ctx.reply("Tag not found.")
-
         match = fuzzy.find(old_name, check)
         if not match[0]:
-            total = 0
-            for idx in range(len(match[1])):
-                total += len(match[1][idx])
-                if total > 1900:
-                    match = match[1][:idx]
-
-            if len(match[1]):
-                return await ctx.reply('Tag not found. Did you mean...\n'+'\n'.join(tag for tag in match[1]))
-            return await ctx.reply('Tag not found.')
-
+            raise TagNotFound(name, match)
+        
         idx = check[match[2]].index(match[1])
         locale = self._tags[ctx.guild.id][match[2]][idx][0]
 
@@ -97,6 +114,65 @@ class Tags(commands.Cog):
             self._tags[ctx.guild.id][match[2]][idx][0].append(new_name)
 
         await ctx.reply(f'Alias "{new_name}" created for "{old_name}" tag.')
+
+    @tag.command()
+    async def edit(self, ctx, name: TagName, new_content: TagContent):
+        """Edits content for an already existing tag."""
+
+        check = self._tags[ctx.guild.id]
+        match = fuzzy.find(name, check)
+        if not match[0]:
+            raise TagNotFound(name, match)
+
+        idx = check[match[2]].index(match[1])
+        self._tags[ctx.guild.id][match[2]][idx][1] = new_content
+
+        await ctx.reply(f'Edited tag "{name}".')
+    
+    @tag.command(aliases=['remove'])
+    async def delete(self, ctx, name: TagName):
+        """Deletes an already existing tag."""
+
+        check = self._tags[ctx.guild.id]
+        match = fuzzy.find(name, check)
+        if not match[0]:
+            raise TagNotFound(name, match)
+        
+        is_mod = ctx.channel.permissions_for(ctx.author).manage_guild
+        is_owner = (ctx.author.id == match[2])
+        if not (is_mod or is_owner):
+            raise commands.CheckFailure()
+        
+        idx = check[match[2]].index(match[1])
+        self._tags[ctx.guild.id][match[2]].pop(idx)
+
+        await ctx.reply(f'Deleted tag "{name}".')
+    
+    @commands.command()
+    async def tags(self, ctx, mention: discord.Member = None):
+        """Lists all (or at least most) of the tags owned by a member of the server."""
+
+        if not mention:
+            mention = ctx.author
+        
+        try:
+            owned = self._tags[ctx.guild.id][mention.id]
+            if not owned:
+                raise KeyError
+        except KeyError:
+            return await ctx.reply(f'{mention} has no tags in this server.')
+
+        total = last = 0
+        for tag in owned:
+            total += len(tag[0][0])+len(tag[1])
+            last += 1
+            if total > 5000 or last > 25:
+                last = owned.index(tag)
+                break
+        owned = owned[:last]
+
+        menu = Pages(TagPageSource(owned, mention, ctx), ctx)
+        await menu.start(ctx)
 
 
 def setup(bot):

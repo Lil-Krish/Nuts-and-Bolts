@@ -11,52 +11,32 @@ class ContentCooldown(commands.CooldownMapping):
     def _bucket_key(self, message):
         return (message.channel.id, message.content)
 
+
 class SpamCheck:
     def __init__(self):
-        self.by_content = ContentCooldown.from_cooldown(15, 18.0, commands.BucketType.member)
-        self.new_user = commands.CooldownMapping.from_cooldown(30, 37.0, commands.BucketType.channel)
+        self.short_check = ContentCooldown.from_cooldown(15, 18.0, commands.BucketType.member)
+        self.long_check = commands.CooldownMapping.from_cooldown(30, 37.0, commands.BucketType.channel)
     
-    def is_new(self, member):
-        now = datetime.datetime.utcnow()
-        one_week_ago, two_months_ago = now - datetime.timedelta(days=7), now - datetime.timedelta(days=60)
-        return member.created_at > two_months_ago and member.joined_at > one_week_ago
-
     def is_spamming(self, message):
         if message.guild is None:
             return
         
         current = message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+        short_bucket = self.short_check.get_bucket(message)
+        long_bucket = self.long_check.get_bucket(message)
+        
+        return (short_bucket.update_rate_limit(current) or long_bucket.update_rate_limit(current))
 
-        if self.is_new(message.author):
-            new_bucket = self.new_user.get_bucket(message)
-            if bucket.update_rate_limit(current):
-                return True
 
-        content_bucket = self.by_content.get_bucket(message)
-        if content_bucket.update_rate_limit(current):
-            return True
+class Reason(commands.Converter):
+    async def convert(self, ctx, argument: commands.clean_content):
+        shown = argument if argument else 'No reason provided.'
+        info = f'{ctx.author} (ID: {ctx.author.id}): "{shown}"'
+        if len(info) > 512:
+            max_reason = 512-(len(info)-len(argument))
+            raise commands.BadArgument(f'{len(argument)} character reason is too long ({max_reason} character max).')
+        return info
 
-        return False
-
-class Conversion(commands.Converter):
-    @classmethod
-    async def get_banned_member(cls, ctx, member_id):
-        try:
-            return await ctx.guild.fetch_ban(ctx.bot.get_user(member_id))
-        except discord.NotFound:
-            raise commands.BadArgument(f'{ctx.bot.get_user(member_id)} has not been banned.')
-        except AttributeError:
-            raise commands.BadArgument(f'{member_id} is not a valid member ID.')
-    
-    @classmethod
-    async def add_info(cls, ctx, reason):
-        shown = reason if reason else 'No reason provided.'
-        full = f'{ctx.author} (ID: {ctx.author.id}): {shown}'
-
-        if len(full) > 512:
-            max_reason = 512 - len(full) + len(reason)
-            raise commands.BadArgument(f'{len(reason)} character reason is too long ({max_reason} character max).')
-        return full
 
 class Mod(commands.Cog):
     """Moderation related commands."""
@@ -71,7 +51,7 @@ class Mod(commands.Cog):
         checker = self._spam_check[message.guild.id] if message.guild else self._spam_check[message.channel.id]
         if checker.is_spamming(message):
             self.bot.blocked['global'].append(message.author)
-            await message.author.send('You have been blocked from using this bot for 24 hours.')
+            await message.author.send('You have been globally blocked from using this bot for one day due to spamming.')
     
     @commands.command()
     @commands.guild_only()
@@ -163,7 +143,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_kick()
-    async def kick(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason=None):
+    async def kick(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason: Reason = None):
         """Kicks members from the server, up to 10 at once.
 
         The command author will be notified of members who could not be kicked unexpectedly.
@@ -172,7 +152,6 @@ class Mod(commands.Cog):
         The bot must have the Kick Members permission for this command to run.
         """
 
-        full = await Conversion.add_info(ctx, reason)
         mentions = list(OrderedDict.fromkeys(mentions))
 
         if len(mentions) > 10:
@@ -186,7 +165,7 @@ class Mod(commands.Cog):
         for member in mentions:
             try:
                 await checks.can_use(ctx, ctx.author, member)
-                await ctx.guild.kick(member, reason=full)
+                await ctx.guild.kick(member, reason=reason)
             except errors as error:
                 if (type(error) == errors[0]):
                     command_failures.append(member)
@@ -203,7 +182,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def ban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason=None):
+    async def ban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason: Reason = None):
         """Bans members from the server, up to 10 at once.
 
         The command author will be notified of members who could not be banned unexpectedly.
@@ -212,7 +191,6 @@ class Mod(commands.Cog):
         The bot must have the Ban Members permission for this command to run.
         """
 
-        full = await Conversion.add_info(ctx, reason)
         mentions = list(OrderedDict.fromkeys(mentions))
 
         if len(mentions) > 10:
@@ -226,7 +204,7 @@ class Mod(commands.Cog):
         for member in mentions:
             try:
                 await checks.can_use(ctx, ctx.author, member)
-                await ctx.guild.ban(member, reason=full)
+                await ctx.guild.ban(member, reason=reason)
             except errors as error:
                 if (type(error) == errors[0]):
                     command_failures.append(member)
@@ -243,7 +221,7 @@ class Mod(commands.Cog):
     @commands.command(aliases=['soft'])
     @commands.guild_only()
     @checks.can_ban()
-    async def softban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason=None):
+    async def softban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason: Reason = None):
         """Softbans members from the server, up to 10 at once.
 
         Softbanning entails the ban and the immediate unban of a member, effectively kicking them while also removing their messages.
@@ -253,7 +231,6 @@ class Mod(commands.Cog):
         The bot must have the Ban Members permission for this command to run.
         """
 
-        full = await Conversion.add_info(ctx, reason)
         mentions = list(OrderedDict.fromkeys(mentions))
 
         if len(mentions) > 10:
@@ -267,8 +244,8 @@ class Mod(commands.Cog):
         for member in mentions:
             try:
                 await checks.can_use(ctx, ctx.author, member)
-                await ctx.guild.ban(member, reason=full)
-                await ctx.guild.unban(member, reason=full)
+                await ctx.guild.ban(member, reason=reason)
+                await ctx.guild.unban(member, reason=reason)
             except errors as error:
                 if (type(error) == errors[0]):
                     command_failures.append(member)
@@ -285,7 +262,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def unban(self, ctx, ids: commands.Greedy[int] = [], *, reason=None):
+    async def unban(self, ctx, ids: commands.Greedy[int] = [], *, reason: Reason = None):
         """Revokes the ban from members on the server, up to 10 at once.
 
         The command author will be notified of members who could not be unbanned unexpectedly.
@@ -294,7 +271,6 @@ class Mod(commands.Cog):
         The bot must have the Ban Members permission for this command to run.
         """
 
-        full = await Conversion.add_info(ctx, reason)
         ids = list(OrderedDict.fromkeys(ids))
 
         if len(ids) > 10:
@@ -308,7 +284,7 @@ class Mod(commands.Cog):
         for member_id in ids:
             try:
                 member = await Conversion.get_banned_member(ctx, member_id)
-                await ctx.guild.unban(member, reason=full)
+                await ctx.guild.unban(member, reason=reason)
             except errors as error:
                 if (type(error) == errors[0]):
                     unbanned.append(ctx.bot.get_user(member_id))
@@ -325,7 +301,7 @@ class Mod(commands.Cog):
     @commands.command(aliases=['add'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def give(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason=None):
+    async def give(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason: Reason = None):
         """Adds roles to members, up to 10 each. 
         
         Members already with a mentioned role will not be affected.
@@ -335,7 +311,6 @@ class Mod(commands.Cog):
         The bot must have the Manage Roles permission for this command to run.
         """
 
-        full = await Conversion.add_info(ctx, reason)
         roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
 
         if len(roles) > 10 or len(mentions) > 10:
@@ -363,7 +338,7 @@ class Mod(commands.Cog):
         mentions = mentions[:10]
         for member in mentions:
             try:
-                await member.add_roles(*working_roles, reason=full)
+                await member.add_roles(*working_roles, reason=reason)
             except discord.HTTPException:
                 member_failures.append(member)
                 failed_members += 1
@@ -380,7 +355,7 @@ class Mod(commands.Cog):
     @commands.command(aliases=['remove'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def take(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason=None):
+    async def take(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason: Reason = None):
         """Takes roles from members, up to 10 each. 
         
         Members already without a mentioned role will not be affected.
@@ -390,7 +365,6 @@ class Mod(commands.Cog):
         The bot must have the Manage Roles permission for this command to run.
         """
 
-        full = await Conversion.add_info(ctx, reason)
         roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
 
         if len(roles) > 10 or len(mentions) > 10:
@@ -418,7 +392,7 @@ class Mod(commands.Cog):
         mentions = mentions[:10]
         for member in mentions:
             try:
-                await member.remove_roles(*working_roles, reason=full)
+                await member.remove_roles(*working_roles, reason=reason)
             except discord.HTTPException:
                 member_failures.append(member)
                 failed_members += 1
@@ -555,7 +529,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.is_mod()
-    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason=None):
+    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason: Reason = None):
         """Clones text channels in the server, including permissions, up to 5 at once.
         
         The command author will be notified of channels that were not cloned unexpectedly.
@@ -563,8 +537,6 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Server permission.
         The bot must have the Manage Server permission for this command to run.
         """
-
-        full = await Conversion.add_info(ctx, reason)
 
         if channels is None:
             channels = [ctx.channel]
@@ -580,7 +552,7 @@ class Mod(commands.Cog):
         command_failures = []
         for channel in channels:
             try:
-                new = await channel.clone(reason=full)
+                new = await channel.clone(reason=reason)
             except errors as error:
                 command_failures.append(channel)
                 failed += 1

@@ -109,7 +109,7 @@ class API(commands.Cog):
         await ctx.reply(file=discord.File(generated, filename='latex.png'))
 
     @commands.command()
-    async def run(self, ctx, language='py', *, code=None):
+    async def run(self, ctx, language, *, code=None):
         """Runs code with the Try It Online interpreter.
         
         Languages currently supported: Python 3, C, C++, C#, Java, Javascript, Rust, and PHP.

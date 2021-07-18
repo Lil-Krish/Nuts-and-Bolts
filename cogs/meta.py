@@ -6,7 +6,7 @@ import discord
 
 class HelpPageSource(menus.ListPageSource):
     def __init__(self, help_command, commands, context):
-        super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=6)
+        super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=3)
         self.help_command = help_command
         self.commands = commands
         self.context = context
@@ -129,6 +129,7 @@ class Help(commands.HelpCommand):
         embed = Embed(ctx=self.context)
         self.command_formatting(embed, command)
         await self.context.send(embed=embed)
+
 
 class Meta(commands.Cog):
     """Handles utilities related to the bot itself."""

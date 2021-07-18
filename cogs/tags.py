@@ -124,6 +124,10 @@ class Tags(commands.Cog):
         if not match[0]:
             raise TagNotFound(name, match)
 
+        is_owner = (ctx.author.id == match[2])
+        if not is_owner:
+            raise commands.CheckFailure()
+        
         idx = check[match[2]].index(match[1])
         self._tags[ctx.guild.id][match[2]][idx][1] = new_content
 
@@ -131,7 +135,10 @@ class Tags(commands.Cog):
     
     @tag.command(aliases=['remove'])
     async def delete(self, ctx, name: TagName):
-        """Deletes an already existing tag."""
+        """Deletes an already existing tag.
+        
+        To use this command, you must be the owner of the tag or have the Manage Server permission.
+        """
 
         check = self._tags[ctx.guild.id]
         match = fuzzy.find(name, check)
@@ -144,9 +151,35 @@ class Tags(commands.Cog):
             raise commands.CheckFailure()
         
         idx = check[match[2]].index(match[1])
-        self._tags[ctx.guild.id][match[2]].pop(idx)
+        del self._tags[ctx.guild.id][match[2]][idx]
 
         await ctx.reply(f'Deleted tag "{name}".')
+    
+    @tag.command()
+    async def transfer(self, ctx, name: TagName, mention: discord.Member):
+        """Transfers ownership of an already existing tag.
+        
+        To use this command, you must be the owner of the tag.
+        """
+
+        check = self._tags[ctx.guild.id]
+        match = fuzzy.find(name, check)
+        if not match[0]:
+            raise TagNotFound(name, match)
+        
+        is_owner = (ctx.author.id == match[2])
+        if not is_owner:
+            raise commands.CheckFailure()
+        
+        idx = check[match[2]].index(match[1])
+        deleted = self._tags[ctx.guild.id][match[2]].pop(idx)
+        
+        try:
+            self._tags[ctx.guild.id][mention.id].append(deleted)
+        except KeyError:
+            self._tags[ctx.guild.id][mention.id] = [deleted]
+
+        await ctx.reply(f'Transferred "{name}" tag ownership to {mention}.')
     
     @commands.command()
     async def tags(self, ctx, mention: discord.Member = None):

@@ -2,7 +2,7 @@ import re
 import heapq
 from difflib import SequenceMatcher
 
-_lower_bound = 0.7
+_lower_bound = 0.75
 
 def _ratio(one, two):
     pair = SequenceMatcher(None, one, two)
@@ -61,17 +61,9 @@ def _collect(text, data, store):
                     store.append(element)
     return False
     
-def find(text, collection, key=None):
+def find(text, collection):
     found = []
     if not collection:
-        return [False, found]
-    
-    if key:
-        extract = collection[key]
-        new = _collect(text, extract, found)
-        if new:
-            new.append(key)
-            return new
         return [False, found]
     
     for key, value in collection.items():

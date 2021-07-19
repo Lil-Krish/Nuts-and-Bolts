@@ -1,9 +1,12 @@
 import datetime, aiohttp
+from typing import Optional
 from io import BytesIO
 from PIL import Image, ImageFont, ImageDraw, ImageOps
 from collections import Counter, defaultdict, OrderedDict
+
 from .utils import checks
 from .utils.paginator import Embed, Pages
+
 from discord.ext import commands
 import discord
 
@@ -30,8 +33,7 @@ class SpamCheck:
 
 class Reason(commands.Converter):
     async def convert(self, ctx, argument: commands.clean_content):
-        shown = argument if argument else 'No reason provided.'
-        info = f'{ctx.author} (ID: {ctx.author.id}): "{shown}"'
+        info = f'{ctx.author} (ID: {ctx.author.id}): "{argument}"'
         if len(info) > 512:
             max_reason = 512-(len(info)-len(argument))
             raise commands.BadArgument(f'{len(argument)} character reason is too long ({max_reason} character max).')
@@ -40,12 +42,11 @@ class Reason(commands.Converter):
 
 class Mod(commands.Cog):
     """Moderation related commands."""
-
     def __init__(self, bot):
         self.bot = bot
         self._deleted_messages = {}
         self._spam_check = defaultdict(SpamCheck)
-
+    
     @commands.Cog.listener()
     async def on_message(self, message):
         checker = self._spam_check[message.guild.id] if message.guild else self._spam_check[message.channel.id]
@@ -56,18 +57,17 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def block(self, ctx, mentions: commands.Greedy[discord.Member] = []):
+    async def block(self, ctx, mentions: commands.Greedy[discord.Member]):
         """Blocks members from using the bot in the server, up to 10 at once.
 
         The command author will be notified of members who could not be blocked unexpectedly.
 
         To use this command, you must have the Ban Members permission.
         """
-        
         mentions = list(OrderedDict.fromkeys(mentions))
         if len(mentions) > 10:
             await ctx.send('You can only block up to 10 members at a time from using the bot.')
-
+        
         failed = 0
         command_failures = []
         errors = (discord.HTTPException, commands.BadArgument)
@@ -86,24 +86,23 @@ class Mod(commands.Cog):
                 failed += 1
             except KeyError:
                 self.bot.blocked[ctx.guild.id] = {member}
-
+        
         await ctx.reply(f'Blocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
 
         if command_failures:
             update = 'These members could not be blocked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
             await ctx.author.send(update)
-
+    
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def unblock(self, ctx, mentions: commands.Greedy[discord.Member] = []):
+    async def unblock(self, ctx, mentions: commands.Greedy[discord.Member]):
         """Unblocks members from using the bot in the server, up to 10 at once.
 
         The command author will be notified of members who could not be unblocked unexpectedly.
 
         To use this command, you must have the Ban Members permission.
         """
-
         mentions = list(OrderedDict.fromkeys(mentions))
         if len(mentions) > 10:
             await ctx.send('You can only unblock up to 10 members at a time from using the bot.')
@@ -135,7 +134,7 @@ class Mod(commands.Cog):
         if globally_banned:
             update = 'These members have been permanently blocked for 24 hours for spamming: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in globally_banned)
             await ctx.author.send(update)
-
+        
         if command_failures:
             update = 'These members could not be unblocked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
             await ctx.author.send(update)
@@ -143,7 +142,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_kick()
-    async def kick(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason: Reason = None):
+    async def kick(self, ctx, mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
         """Kicks members from the server, up to 10 at once.
 
         The command author will be notified of members who could not be kicked unexpectedly.
@@ -151,9 +150,10 @@ class Mod(commands.Cog):
         To use this command, you must have the Kick Members permission.
         The bot must have the Kick Members permission for this command to run.
         """
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         mentions = list(OrderedDict.fromkeys(mentions))
-
         if len(mentions) > 10:
             await ctx.reply('You can only kick up to 10 members at a time.')
 
@@ -182,7 +182,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def ban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason: Reason = None):
+    async def ban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
         """Bans members from the server, up to 10 at once.
 
         The command author will be notified of members who could not be banned unexpectedly.
@@ -190,9 +190,10 @@ class Mod(commands.Cog):
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
         """
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         mentions = list(OrderedDict.fromkeys(mentions))
-
         if len(mentions) > 10:
             await ctx.reply('You can only ban up to 10 members at a time.')
 
@@ -221,7 +222,7 @@ class Mod(commands.Cog):
     @commands.command(aliases=['soft'])
     @commands.guild_only()
     @checks.can_ban()
-    async def softban(self, ctx, mentions: commands.Greedy[discord.Member] = [], *, reason: Reason = None):
+    async def softban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
         """Softbans members from the server, up to 10 at once.
 
         Softbanning entails the ban and the immediate unban of a member, effectively kicking them while also removing their messages.
@@ -230,9 +231,10 @@ class Mod(commands.Cog):
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
         """
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         mentions = list(OrderedDict.fromkeys(mentions))
-
         if len(mentions) > 10:
             await ctx.reply('You can only softban up to 10 members at a time.')
 
@@ -262,7 +264,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
-    async def unban(self, ctx, ids: commands.Greedy[int] = [], *, reason: Reason = None):
+    async def unban(self, ctx, ids: commands.Greedy[int], *, reason: Optional[Reason]):
         """Revokes the ban from members on the server, up to 10 at once.
 
         The command author will be notified of members who could not be unbanned unexpectedly.
@@ -270,9 +272,10 @@ class Mod(commands.Cog):
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
         """
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         ids = list(OrderedDict.fromkeys(ids))
-
         if len(ids) > 10:
             await ctx.reply('You can only unban up to 10 members at a time.')
 
@@ -301,7 +304,7 @@ class Mod(commands.Cog):
     @commands.command(aliases=['add'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def give(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason: Reason = None):
+    async def give(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
         """Adds roles to members, up to 10 each. 
         
         Members already with a mentioned role will not be affected.
@@ -310,9 +313,10 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
         """
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
-
         if len(roles) > 10 or len(mentions) > 10:
             await ctx.reply('You can only add up to 10 roles to up to 10 members at a time.')
 
@@ -355,7 +359,7 @@ class Mod(commands.Cog):
     @commands.command(aliases=['remove'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def take(self, ctx, roles: commands.Greedy[discord.Role] = [], mentions: commands.Greedy[discord.Member] = [], reason: Reason = None):
+    async def take(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
         """Takes roles from members, up to 10 each. 
         
         Members already without a mentioned role will not be affected.
@@ -364,9 +368,10 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
         """
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
-
         if len(roles) > 10 or len(mentions) > 10:
             await ctx.reply('You can only remove up to 10 roles to up to 10 members at a time.')
 
@@ -406,7 +411,7 @@ class Mod(commands.Cog):
             update = str(role_update or '') + '\n' + str(member_update or '')
             await ctx.author.send(update)
 
-    @commands.command(aliases=['clean'])
+    @commands.command(aliases=['purge'])
     @commands.guild_only()
     @commands.cooldown(rate=1, per=5.0, type=commands.BucketType.member)
     @checks.manage_messages()
@@ -424,7 +429,6 @@ class Mod(commands.Cog):
         
         The bot must have the Manage Messages permission for this command to run.
         """
-
         def check(msg):
             return msg.author in mentions if mentions else True
             
@@ -460,7 +464,6 @@ class Mod(commands.Cog):
         
         Replying with this command will search the referred message author.
         """
-
         if mention is None:
             ref = ctx.message.reference
             if ref and isinstance(ref.resolved, discord.Message):
@@ -515,7 +518,6 @@ class Mod(commands.Cog):
     @commands.guild_only()
     async def snipe(self, ctx, channel: discord.TextChannel = None):
         """Retrieves the most recent deleted message in a channel."""
-
         if channel is None:
             channel = ctx.channel
 
@@ -537,7 +539,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.is_mod()
-    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, reason: Reason = None):
+    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, *, reason: Optional[Reason] = None):
         """Clones text channels in the server, including permissions, up to 5 at once.
         
         The command author will be notified of channels that were not cloned unexpectedly.
@@ -545,12 +547,12 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Server permission.
         The bot must have the Manage Server permission for this command to run.
         """
-
         if channels is None:
             channels = [ctx.channel]
-
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
         channels = list(OrderedDict.fromkeys(channels))
-
         if len(channels) > 5:
             await ctx.reply('You can only clone up to 5 channels at a time.')
         

@@ -1,28 +1,49 @@
 import urllib.parse, urllib.request
+from typing import Optional
 from io import BytesIO
 from PIL import Image
 import googletrans
 from youtubesearchpython import VideosSearch, ResultMode
 from pytio import Tio, TioRequest
-from .utils.paginator import Embed
+
+from .utils.paginator import Embed, Pages
+
+from discord.ext import commands, menus
 import discord
-from discord.ext import commands
+
+class YouTubePageSource(menus.ListPageSource):
+    def __init__(self, videos, context):
+        super().__init__(entries=videos, per_page=6)
+        self.context = context
+    
+    async def format_page(self, menu, entries):
+        embed = Embed(title='YouTube Search', ctx=self.context)
+        embed.set_thumbnail(url='https://i.postimg.cc/9QXFxh8X/youtube.png')
+        for video in entries:
+            title, url = video['title'], video['link']
+            length, views = video['accessibility']['duration'], video['viewCount']['text']
+            channel = video['channel']['name']
+            embed.add_field(name=channel, value=f'[{title}]({url} "{length}\n{views}")')
+        
+        max_pages = self.get_max_pages()
+        if max_pages > 1:
+            embed.set_footer(text=f'Page {menu.current_page + 1}/{max_pages}')
+        return embed
+
 
 class API(commands.Cog):
     """Commands that use outside APIs."""
-
     def __init__(self, bot):
         self.bot = bot
         self.loop = self.bot.loop
         self.trans = googletrans.Translator()
 
     @commands.command()
-    async def translate(self, ctx, *, message: commands.clean_content = None):
+    async def translate(self, ctx, *, message: Optional[commands.clean_content]):
         """Translates a message to English with Google Translate.
         
         Replying with this command will translate the referred message content.
         """
-
         if message is None:
             ref = ctx.message.reference
             if ref and ref.resolved.content and isinstance(ref.resolved, discord.Message):
@@ -43,12 +64,11 @@ class API(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(aliases=['yt'])
-    async def youtube(self, ctx, *, query=None):
+    async def youtube(self, ctx, *, query: Optional[str]):
         """Queries Youtube and retrieves the top videos.
         
         Replying with this command will query the referred message content.
         """
-
         if query is None:
             ref = ctx.message.reference
             if ref and ref.resolved.content and isinstance(ref.resolved, discord.Message):
@@ -56,20 +76,11 @@ class API(commands.Cog):
             else:
                 return await ctx.reply('Please provide a message to query.')
 
-        videos = await self.loop.run_in_executor(None, VideosSearch, query, 9)
+        videos = await self.loop.run_in_executor(None, VideosSearch, query, 12)
         result = videos.result(mode=ResultMode.dict)['result']
 
-        embed = Embed(title='YouTube Search', ctx=ctx)
-        embed.set_thumbnail(url='https://i.postimg.cc/9QXFxh8X/youtube.png')
-
-        for video in result:
-            title, url = video['title'], video['link']
-            length, views = video['accessibility']['duration'], video['viewCount']['text']
-            channel = video['channel']['name']
-
-            embed.add_field(name=channel, value=f'[{title}]({url} "{length}\n{views}")')
-            
-        await ctx.send(embed=embed)
+        menu = Pages(YouTubePageSource(result, ctx), ctx)
+        await menu.start(ctx)
 
     def generate_file(self, tex):
         margin, overlay = 20, '\hspace*{-0.5cm}'
@@ -92,12 +103,11 @@ class API(commands.Cog):
         return data
 
     @commands.command(aliases=['tex'])
-    async def latex(self, ctx, *, code=None):
+    async def latex(self, ctx, *, code: Optional[str]):
         """Compiles a LaTeX image with the CodeCogs equation editor.
         
         Replying with this command will parse the referred message content.
         """
-
         if code is None:
             ref = ctx.message.reference
             if ref and ref.resolved.content and isinstance(ref.resolved, discord.Message):
@@ -109,14 +119,13 @@ class API(commands.Cog):
         await ctx.reply(file=discord.File(generated, filename='latex.png'))
 
     @commands.command()
-    async def run(self, ctx, language, *, code=None):
+    async def run(self, ctx, language, *, code: Optional[str]):
         """Runs code with the Try It Online interpreter.
         
         Languages currently supported: Python 3, C, C++, C#, Java, Javascript, Rust, and PHP.
 
         Replying with this command will parse the referred message content.
         """
-
         if code is None:
             ref = ctx.message.reference
             if ref and ref.resolved.content and isinstance(ref.resolved, discord.Message):
@@ -163,7 +172,7 @@ class API(commands.Cog):
         times = []
         for idx in range(1, 5):
             times.append(''.join(data[idx][11:].split(' ')))
-
+        
         times.append(data[5][11:])
 
         for idx in range(len(names)):
@@ -177,7 +186,7 @@ class API(commands.Cog):
             if len(result.result) > 1024:
                 return await ctx.reply('Standard output is too long to be displayed.')
             embed.add_field(name='Standard Output', value='```\n'+result.result+'```')
-
+        
         await ctx.send(embed=embed)
 
 

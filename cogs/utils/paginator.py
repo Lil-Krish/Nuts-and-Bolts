@@ -1,5 +1,7 @@
+import asyncio
+
 from discord.ext import menus
-import discord, asyncio
+import discord
 
 class Embed(discord.Embed):
     def __init__(self, **kwargs):
@@ -42,7 +44,7 @@ class Pages(menus.MenuPages):
         await self.message.edit(embed=embed)
         
         async def back():
-            await asyncio.sleep(30.0)
+            await asyncio.sleep(10.0)
             await self.show_page(self.current_page)
 
         self.bot.loop.create_task(back())

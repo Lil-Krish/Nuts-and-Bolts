@@ -1,6 +1,8 @@
 import time
+
 from .utils import checks
 from .utils.paginator import Embed, Pages
+
 from discord.ext import commands, menus
 import discord
 
@@ -10,35 +12,27 @@ class HelpPageSource(menus.ListPageSource):
         self.help_command = help_command
         self.commands = commands
         self.context = context
-
-    def format_commands(self, cog, commands):
-        short_doc = cog.description.split('\n', 1)[0] + '\n'
-        current_count = len(short_doc)
-
-        page = []
-        for command in commands:
-            value = f'`{command.name}`'
-            count = len(value) + 1
-            if count + current_count < 900:
-                current_count += count
-                page.append(value)
-            else:
-                page.pop()
-                break
-
-        return short_doc + ' '.join(page)
-
+    
     async def format_page(self, menu, cogs):
-        description = f'Use `?help [command]` for more info on a command group.\n'
-
+        description = f'Use `?help [command]` for more info on a command group.'
         embed = Embed(title='Categories', description=description, ctx=self.context)
         
         for cog in cogs:
             commands = self.commands.get(cog)
             if commands:
-                value = self.format_commands(cog, commands)
-                embed.add_field(name=cog.qualified_name, value=value, inline=True)
+                short_doc = cog.description.split('\n', 1)[0]+'\n'
+                current_count = len(short_doc)
 
+                page = []
+                for command in commands:
+                    form = f'`{command.name}`'
+                    count = len(form)+2
+                    if count + current_count < 900:
+                        current_count += count
+                        page.append(form)
+                
+                embed.add_field(name=cog.qualified_name, value=short_doc + ' '.join(page), inline=True)
+        
         max_pages = self.get_max_pages()
         if max_pages > 1:
             embed.set_footer(text=f'Page {menu.current_page + 1}/{max_pages}')
@@ -59,7 +53,7 @@ class GroupPageSource(menus.ListPageSource):
         for command in commands:
             signature = f'{command.qualified_name} {command.signature}'
             embed.add_field(name=signature, value=command.short_doc, inline=False)
-
+        
         embed.set_footer(text=f'Use ?help [command] for more info on a command')
         return embed
 
@@ -77,11 +71,11 @@ class Help(commands.HelpCommand):
             names = f'[{command.name}|{aliases}]'
             if parent:
                 names = f'{parent} {names}'
-            alias = names
+            aliases = names
         else:
-            alias = command.name if not parent else f'{parent} {command.name}'
-        return f'{alias} {command.signature}'
-
+            aliases = command.name if not parent else f'{parent} {command.name}'
+        return f'{aliases} {command.signature}'
+    
     async def send_bot_help(self, mapping):
         bot = self.context.bot
         entries = await self.filter_commands(bot.commands, sort=True)
@@ -97,18 +91,13 @@ class Help(commands.HelpCommand):
 
         menu = Pages(HelpPageSource(self, all_commands, self.context), self.context)
         await menu.start(self.context)
-
-    def command_formatting(self, embed, command):
-        embed.title = self.get_command_signature(command)
-        embed.description = command.help
-        embed.set_footer(text='Use ?help to view a list of all commands.')
-        
+    
     async def send_cog_help(self, cog):
         entries = await self.filter_commands(cog.get_commands(), sort=True)
         
         menu = Pages(GroupPageSource(cog, entries, self.context), self.context)
         await menu.start(self.context)
-
+    
     async def send_group_help(self, group):
         sub = group.commands
         if len(sub) == 0:
@@ -124,16 +113,17 @@ class Help(commands.HelpCommand):
 
         menu = Pages(source, self.context)
         await menu.start(self.context)
-
+    
     async def send_command_help(self, command):
         embed = Embed(ctx=self.context)
-        self.command_formatting(embed, command)
+        embed.title = self.get_command_signature(command)
+        embed.description = command.help
+        embed.set_footer(text='Use ?help to view a list of all commands.')
         await self.context.send(embed=embed)
 
 
 class Meta(commands.Cog):
     """Handles utilities related to the bot itself."""
-
     def __init__(self, bot):
         self.bot = bot
         bot.help_command = Help()
@@ -142,14 +132,12 @@ class Meta(commands.Cog):
     @commands.command(aliases=['hi'])
     async def hello(self, ctx):
         """Displays the intro message."""
-
         owner = self.bot.get_user(int(self.bot.owner_id))
         await ctx.send(f'Hello! I\'m a robot! {owner} made me. Use `?help` to learn what I can do!')
     
     @commands.command()
     async def ping(self, ctx):
         """Replies with the bot latency."""
-
         timing = round(1000*self.bot.latency, 2)
         await ctx.reply(f'Pong. ({timing} ms)')
     
@@ -162,22 +150,18 @@ class Meta(commands.Cog):
         Please only use this command for the above purpose. 
         You can only give feedback once a minute. Misuse will lead to a blacklist.
         """
-
         owner = self.bot.get_user(self.bot.owner_id)
-        
         await owner.send(f'{ctx.author} suggested "{suggestion}".')
         await ctx.send('Your suggestion has been recorded.')
     
     @commands.Cog.listener()
     async def on_connect(self):
-        self.bot.then = int(round(time.time()))
-        
+        self.bot.then = round(time.time())
+    
     @commands.command(aliases=['up'])
     async def uptime(self, ctx):
         """Replies with how long the bot has been up for."""
-
-        interval = time.gmtime(int(round(time.time())) - self.bot.then)
-
+        interval = time.gmtime(round(time.time()) - self.bot.then)
         hrs, mins, secs = int(time.strftime('%H', interval)), int(time.strftime('%M', interval)), int(time.strftime('%S', interval))
         
         attrs = {
@@ -187,7 +171,6 @@ class Meta(commands.Cog):
         }
         
         uptime = f"{attrs['h'][(hrs, 2)[hrs > 1]]}{attrs['m'][(mins, 2)[mins > 1]]}{attrs['s'][(secs, 2)[secs > 1]]}"[:-2]
-        
         await ctx.reply('Uptime: **'+uptime+'**.')
 
 

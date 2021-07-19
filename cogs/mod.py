@@ -539,7 +539,7 @@ class Mod(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @checks.is_mod()
-    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel] = None, *, reason: Optional[Reason] = None):
+    async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel], *, reason: Optional[Reason]):
         """Clones text channels in the server, including permissions, up to 5 at once.
         
         The command author will be notified of channels that were not cloned unexpectedly.
@@ -547,7 +547,7 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Server permission.
         The bot must have the Manage Server permission for this command to run.
         """
-        if channels is None:
+        if not channels:
             channels = [ctx.channel]
         if reason is None:
             reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'

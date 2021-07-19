@@ -15,7 +15,7 @@ class RNG(commands.Cog):
         await ctx.reply(' '.join(random.sample(choices, number)))
     
     @commands.command()
-    async def generate(self, ctx, first_num: Optional[float] = 1.0, second_num: Optional[float] = 2.0):
+    async def generate(self, ctx, first_num: Optional[float] = 0, second_num: Optional[float] = 1):
         """Generates a random float within a bound."""
         await ctx.reply(round(random.uniform(first_num, second_num), 2))
 

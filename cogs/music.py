@@ -177,7 +177,7 @@ class Music(commands.Cog):
                 self._queue[ctx.guild.id].append(videos[change])
                 await ctx.reply('Added to queue.')
     
-    @commands.command()
+    @commands.group(invoke_without_command=True)
     async def queue(self, ctx):
         """Shows the server-wide music queue."""
         if not self._queue[ctx.guild.id]:
@@ -188,6 +188,16 @@ class Music(commands.Cog):
         
         menu = Pages(QueuePageSource(formatted, ctx), ctx)
         await menu.start(ctx)
+    
+    @queue.command(aliases=['remove'])
+    async def delete(self, ctx, index):
+        """Deletes an item from the queue."""
+        if index > len(self._queue[ctx.guild.id]) or index < 0:
+            return await ctx.reply(f"The server music queue does not contain index {index}")
+        
+        if await self._check_conditions(ctx):
+            del self._queue[ctx.guild.id][index-1]
+            await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
     
     @commands.command(aliases=['voteskip'])
     async def skip(self, ctx):
@@ -259,16 +269,6 @@ class Music(commands.Cog):
                 await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
             else:
                 await ctx.reply('Music is not playing.')
-    
-    @commands.command()
-    async def discard(self, ctx, index):
-        """Removes an item from the queue."""
-        if index > len(self._queue[ctx.guild.id]) or index < 0:
-            return await ctx.reply(f"The server music queue does not contain index {index}")
-        
-        if await self._check_conditions(ctx):
-            del self._queue[ctx.guild.id][index-1]
-            await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
 
 
 def setup(bot):

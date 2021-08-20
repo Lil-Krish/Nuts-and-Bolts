@@ -53,7 +53,7 @@ class API(commands.Cog):
         embed = Embed(title='Translator', ctx=ctx)
         embed.set_thumbnail(url='https://i.postimg.cc/mDqNXRkM/translate.png')
 
-        src = googletrans.LANGUAGES.get(result.src, 'Auto Detected').title()
+        src = googletrans.LANGUAGES.get(result.src, 'Auto Detection').title()
         dest = googletrans.LANGUAGES.get(result.dest, 'Unknown').title()
         embed.add_field(name=f'From {src}', value=result.origin, inline=False)
         embed.add_field(name=f'To {dest}', value=result.text, inline=False)

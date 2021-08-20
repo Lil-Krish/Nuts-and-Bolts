@@ -1,7 +1,8 @@
-googletrans==4.0.0rc1
+youtube_dl==2021.6.6
 aiohttp>=3.7.4
-pytio==0.3.1
-git+https://github.com/Rapptz/discord-ext-menus
 youtube_search_python==1.4.6
+pytio==0.3.1
+googletrans==4.0.0rc1
+git+https://github.com/Rapptz/discord-ext-menus
 discord==1.7.3
-Pillow==8.3.0
+Pillow==8.3.1

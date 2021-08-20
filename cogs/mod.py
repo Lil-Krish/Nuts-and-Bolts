@@ -1,11 +1,12 @@
 import datetime, aiohttp
 from typing import Optional
 from io import BytesIO
-from PIL import Image, ImageFont, ImageDraw, ImageOps
+from PIL import Image
 from collections import Counter, defaultdict, OrderedDict
+from operator import attrgetter
 
 from .utils import checks
-from .utils.paginator import Embed, Pages
+from .utils.paginator import Embed
 
 from discord.ext import commands
 import discord
@@ -51,369 +52,204 @@ class Mod(commands.Cog):
     async def on_message(self, message):
         checker = self._spam_check[message.guild.id] if message.guild else self._spam_check[message.channel.id]
         if checker.is_spamming(message):
-            self.bot.blocked['global'].append(message.author)
-            await message.author.send('You have been globally blocked from using this bot for one day due to spamming.')
+            self.bot.blocked['global'].add(message.author)
+            await message.author.send('You have been banned from the relevant server and globally blocked from using this bot for one day due to spamming.')
+            if message.guild:
+                await message.guild.ban(message.author, reason='Spam autoban.')
+    
+    async def _modify_list(self, ctx, data, bucket: Optional[str] = 'members', max_length: Optional[int] = 5):
+        data = list(OrderedDict.fromkeys(data))
+        if len(data) > max_length:
+            await ctx.reply(f'You can only execute this action on {max_length} {bucket} at a time.')
+        return data[:max_length]
+    
+    async def _modify_access(self, ctx, action, *, entities, bucket: Optional[str] = 'members', max_length: Optional[int] = 10, reason: Optional[Reason] = None):
+        attrs = {
+            'block' : 'add',
+            'unblock' : 'remove',
+            'softban' : ['ban', 'unban'],
+        }
+        
+        entities = await self._modify_list(ctx, entities, max_length)
+        
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        
+        errors = (discord.Forbidden, discord.NotFound, KeyError, discord.HTTPException, commands.BadArgument)
+        successes = []
+        dump = [[] for _ in range(6)]
+        for entity in entities:
+            try:
+                is_int = (type(entity) == int)
+                if  is_int or checks.can_use(ctx, ctx.author, entity):
+                    used = entity
+                    if is_int:
+                        entity = (await ctx.guild.fetch_ban(discord.Object(id=entity))).user
+                    try:
+                        getattr(self.bot.blocked[ctx.guild.id], attrs.get(action, str()))(entity)
+                    except AttributeError:
+                        try:
+                            await getattr(ctx.guild, action)(entity, reason=reason)
+                        except (AttributeError, KeyError):
+                            try:
+                                funcs = attrgetter(*attrs[action])(ctx.guild)
+                                [func(entity, reason=reason) for func in funcs]
+                            except (AttributeError, KeyError):
+                                await getattr(entity, action)(reason=reason)
+                    successes.append(used)
+            except errors as e:
+                dump[errors.index(type(e))].append(entity)
+            else:
+                dump[5].append(entity)
+        
+        val = str()
+        embed = Embed(title=f'{action.capitalize()} {bucket.capitalize()}', ctx=ctx)
+        causes = ('I cannot access this entity.', 'This entity has not been banned.', 'This entity has not been blocked.', 'Unexpected error.', 'This entity does not exist.', 'You cannot edit this entity.')
+        attrs = ('\N{CROSS MARK}', '\N{WHITE HEAVY CHECK MARK}')
+        for entity in entities:
+            if entity in successes:
+                val += f'{entity}\n'
+            else:
+                for signal in dump:
+                    if entity in signal:
+                        embed.add_field(name=f'{attrs[0]} {entity}', value=causes[dump.index(signal)], inline=False)
+                        break
+        
+        if val:
+            embed.add_field(name=f'{attrs[-1]} Success', value=val)
+        await ctx.send(embed=embed)
     
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
     async def block(self, ctx, mentions: commands.Greedy[discord.Member]):
         """Blocks members from using the bot in the server, up to 10 at once.
-
-        The command author will be notified of members who could not be blocked unexpectedly.
-
+        
         To use this command, you must have the Ban Members permission.
         """
-        mentions = list(OrderedDict.fromkeys(mentions))
-        if len(mentions) > 10:
-            await ctx.send('You can only block up to 10 members at a time from using the bot.')
-        
-        failed = 0
-        command_failures = []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        mentions = mentions[:10]
-        for member in mentions:
-            if member in self.bot.blocked['global']:
-                continue
-            try:
-                self.bot.blocked[ctx.guild.id].add(member)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    command_failures.append(member)
-                elif (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed += 1
-            except KeyError:
-                self.bot.blocked[ctx.guild.id] = {member}
-        
-        await ctx.reply(f'Blocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
-
-        if command_failures:
-            update = 'These members could not be blocked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-            await ctx.author.send(update)
+        await self._modify_access(ctx, 'block', entities=mentions);
     
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
     async def unblock(self, ctx, mentions: commands.Greedy[discord.Member]):
         """Unblocks members from using the bot in the server, up to 10 at once.
-
-        The command author will be notified of members who could not be unblocked unexpectedly.
+        Globally blocked members will continue to be blocked until their limit is up.
 
         To use this command, you must have the Ban Members permission.
         """
-        mentions = list(OrderedDict.fromkeys(mentions))
-        if len(mentions) > 10:
-            await ctx.send('You can only unblock up to 10 members at a time from using the bot.')
-
-        failed = 0
-        command_failures = []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        mentions = mentions[:10]
-        globally_banned = []
-        for member in mentions:
-            if member in self.bot.blocked['global']:
-                globally_banned.append(member)
-                failed += 1
-                continue
-            try:
-                self.bot.blocked[ctx.guild.id].remove(member)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    command_failures.append(member)
-                elif (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed += 1
-            except KeyError:
-                pass
-        
-        await ctx.reply(f'Unblocked {len(mentions) - failed}/{len(mentions)} members from using the bot in this server.')
-
-        if globally_banned:
-            update = 'These members have been permanently blocked for 24 hours for spamming: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in globally_banned)
-            await ctx.author.send(update)
-        
-        if command_failures:
-            update = 'These members could not be unblocked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-            await ctx.author.send(update)
+        await self._modify_access(ctx, 'unblock', entities=mentions);
     
     @commands.command()
     @commands.guild_only()
     @checks.can_kick()
     async def kick(self, ctx, mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
-        """Kicks members from the server, up to 10 at once.
-
-        The command author will be notified of members who could not be kicked unexpectedly.
-
+        """Kicks members from the server, up to 5 at once.
+        
         To use this command, you must have the Kick Members permission.
         The bot must have the Kick Members permission for this command to run.
         """
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
-        
-        mentions = list(OrderedDict.fromkeys(mentions))
-        if len(mentions) > 10:
-            await ctx.reply('You can only kick up to 10 members at a time.')
-
-        failed = 0
-        command_failures = []
-        errors = (discord.HTTPException, commands.BadArgument)
-        
-        mentions = mentions[:10]
-        for member in mentions:
-            try:
-                await checks.can_use(ctx, ctx.author, member)
-                await ctx.guild.kick(member, reason=reason)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    command_failures.append(member)
-                elif (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed += 1
-
-        await ctx.reply(f'Kicked {len(mentions) - failed}/{len(mentions)} members.')
-
-        if command_failures:
-            update = 'These members could not be kicked for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-            await ctx.author.send(update)
+        await self._modify_access(ctx, 'kick', entities=mentions, reason=reason)
 
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
     async def ban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
-        """Bans members from the server, up to 10 at once.
-
-        The command author will be notified of members who could not be banned unexpectedly.
-
+        """Bans members from the server, up to 5 at once.
+        
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
         """
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
-        
-        mentions = list(OrderedDict.fromkeys(mentions))
-        if len(mentions) > 10:
-            await ctx.reply('You can only ban up to 10 members at a time.')
-
-        failed = 0
-        command_failures = []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        mentions = mentions[:10]
-        for member in mentions:
-            try:
-                await checks.can_use(ctx, ctx.author, member)
-                await ctx.guild.ban(member, reason=reason)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    command_failures.append(member)
-                elif (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed += 1
-
-        await ctx.reply(f'Banned {len(mentions) - failed}/{len(mentions)} members.')
-
-        if command_failures:
-            update = 'These members could not be banned for unexpected reasons: \n'+ '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-            await ctx.author.send(update)
+        await self._modify_access(ctx, 'ban', entities=mentions, reason=reason)
 
     @commands.command(aliases=['soft'])
     @commands.guild_only()
     @checks.can_ban()
     async def softban(self, ctx, mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
-        """Softbans members from the server, up to 10 at once.
-
+        """Softbans members from the server, up to 5 at once.
+        
         Softbanning entails the ban and the immediate unban of a member, effectively kicking them while also removing their messages.
-        The command author will be notified of members who could not be softbanned unexpectedly.
-
+        
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
         """
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
-        
-        mentions = list(OrderedDict.fromkeys(mentions))
-        if len(mentions) > 10:
-            await ctx.reply('You can only softban up to 10 members at a time.')
-
-        failed = 0
-        command_failures = []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        mentions = mentions[:10]
-        for member in mentions:
-            try:
-                await checks.can_use(ctx, ctx.author, member)
-                await ctx.guild.ban(member, reason=reason)
-                await ctx.guild.unban(member, reason=reason)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    command_failures.append(member)
-                elif (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed += 1
-
-        await ctx.reply(f'Softbanned {len(mentions) - failed}/{len(mentions)} members.')
-
-        if command_failures:
-            update = 'These members could not be softbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-            await ctx.author.send(update)
+        await self._modify_access(ctx, 'softban', entities=mentions, reason=reason)
 
     @commands.command()
     @commands.guild_only()
     @checks.can_ban()
     async def unban(self, ctx, ids: commands.Greedy[int], *, reason: Optional[Reason]):
-        """Revokes the ban from members on the server, up to 10 at once.
-
-        The command author will be notified of members who could not be unbanned unexpectedly.
-
+        """Revokes the ban from members on the server, up to 5 at once.
+        
         To use this command, you must have the Ban Members permission.
         The bot must have the Ban Members permission for this command to run.
         """
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
+        await self._modify_access(ctx, 'unban', entities=ids, reason=reason)
+    
+    async def _modify_roles(self, ctx, action, *, entities, affixes, max_length: Optional[int] = 5, reason: Optional[Reason] = None):
+        entities = await self._modify_list(ctx, entities, max_length)
+        affixes = await self._modify_list(ctx, affixes, 'roles', max_length)
         
-        ids = list(OrderedDict.fromkeys(ids))
-        if len(ids) > 10:
-            await ctx.reply('You can only unban up to 10 members at a time.')
-
-        failed = 0
-        command_failures = []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        ids = ids[:10]
-        for member_id in ids:
-            try:
-                member = await Conversion.get_banned_member(ctx, member_id)
-                await ctx.guild.unban(member, reason=reason)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    unbanned.append(ctx.bot.get_user(member_id))
-                elif (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed += 1
-
-        await ctx.reply(f'Unbanned {len(ids) - failed}/{len(ids)} members.')
-
-        if command_failures:
-            update = 'These members could not be unbanned for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in command_failures)
-            await ctx.author.send(update)
+        errors = (discord.Forbidden, discord.HTTPException, commands.BadArgument)
+        working = {}
+        dump = [[] for _ in range(4)]
+        for entity in entities:
+            for affix in affixes:
+                try:
+                    if checks.can_set(ctx, ctx.author, affix):
+                        await getattr(entity, action)(affix, reason=reason)
+                        try:
+                            working[affix].append(entity)
+                        except:
+                            working[affix] = [entity]
+                    else:
+                        dump[3].append(affix)
+                except errors as e:
+                    dump[errors.index(type(e))].append(affix)
+        
+        embed = Embed(title=f'{action[:-6].capitalize()} Roles', ctx=ctx)
+        causes = ('I cannot access this entity.', 'Unexpected error.', 'This entity does not exist.', 'You cannot edit this entity.')
+        attrs = ('\N{CROSS MARK}', '\N{WHITE HEAVY CHECK MARK}')
+        for affix in affixes:
+            if affix in working.keys():
+                val = str()
+                for entity in entities:
+                    if entity in working[affix]:
+                        val += f'{entity}\n'
+                embed.add_field(name=f'{attrs[-1]} {affix}', value=val, inline=False)
+            else:
+                for signal in dump:
+                    if affix in signal:
+                        embed.add_field(name=f'{attrs[0]} {affix}', value=causes[dump.index(signal)], inline=False)
+                        break
+        
+        await ctx.send(embed=embed)
     
     @commands.command(aliases=['add'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def give(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
-        """Adds roles to members, up to 10 each. 
+    async def give(self, ctx, mentions: commands.Greedy[discord.Member], roles: commands.Greedy[discord.Role], *, reason: Optional[Reason]):
+        """Adds roles to members, up to 5 each.
         
-        Members already with a mentioned role will not be affected.
-        The command author will be notified of roles/members who were not affected unexpectedly.
-
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
         """
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
-        
-        roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
-        if len(roles) > 10 or len(mentions) > 10:
-            await ctx.reply('You can only add up to 10 roles to up to 10 members at a time.')
-
-        failed_roles = 0
-        working_roles, role_failures = [], []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        roles = roles[:10]
-        for role in roles:
-            try:
-                await checks.can_set(ctx, ctx.author, role)
-                working_roles.append(role)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    role_failures.append(role)
-                if (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed_roles += 1
-
-        failed_members = 0
-        member_failures = []
-
-        mentions = mentions[:10]
-        for member in mentions:
-            try:
-                await member.add_roles(*working_roles, reason=reason)
-            except discord.HTTPException:
-                member_failures.append(member)
-                failed_members += 1
-
-        await ctx.reply(f'Added {len(roles) - failed_roles}/{len(roles)} roles to {len(mentions) - failed_members}/{len(mentions)} members.')
-
-        role_update = 'These roles could not be added for unexpected reasons: \n' + '\n'.join(str(role)+' ||(ID: '+str(role.id)+')||' for role in role_failures) if role_failures else None
-        member_update = 'Roles could not be added to these members for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in member_failures) if member_failures else None
-
-        if role_update or member_update:
-            update = str(role_update or '') + '\n' + str(member_update or '')
-            await ctx.author.send(update)
+        await self._modify_roles(ctx, 'add_roles', entities=mentions, affixes=roles)
     
     @commands.command(aliases=['remove'])
     @commands.guild_only()
     @checks.manage_roles()
-    async def take(self, ctx, roles: commands.Greedy[discord.Role], mentions: commands.Greedy[discord.Member], *, reason: Optional[Reason]):
-        """Takes roles from members, up to 10 each. 
+    async def take(self, ctx, mentions: commands.Greedy[discord.Member], roles: commands.Greedy[discord.Role], *, reason: Optional[Reason]):
+        """Takes roles from members, up to 5 each.
         
-        Members already without a mentioned role will not be affected.
-        The command author will be notified of roles/members who were not affected unexpectedly.
-
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
         """
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
-        
-        roles, mentions = list(OrderedDict.fromkeys(roles)), list(OrderedDict.fromkeys(mentions))
-        if len(roles) > 10 or len(mentions) > 10:
-            await ctx.reply('You can only remove up to 10 roles to up to 10 members at a time.')
-
-        failed_roles = 0
-        working_roles, role_failures = [], []
-        errors = (discord.HTTPException, commands.BadArgument)
-
-        roles = roles[:10]
-        for role in roles:
-            try:
-                await checks.can_set(ctx, ctx.author, role)
-                working_roles.append(role)
-            except errors as error:
-                if (type(error) == errors[0]):
-                    role_failures.append(role)
-                if (type(error) == errors[1]):
-                    await ctx.reply(error)
-                failed_roles += 1
-
-        failed_members = 0
-        member_failures = []
-
-        mentions = mentions[:10]
-        for member in mentions:
-            try:
-                await member.remove_roles(*working_roles, reason=reason)
-            except discord.HTTPException:
-                member_failures.append(member)
-                failed_members += 1
-
-        await ctx.reply(f'Removed {len(roles) - failed_roles}/{len(roles)} roles from {len(mentions) - failed_members}/{len(mentions)} members.')
-
-        role_update = 'These roles could not be removed for unexpected reasons: \n' + '\n'.join(str(role)+' ||(ID: '+str(role.id)+')||' for role in role_failures) if role_failures else None
-        member_update = 'Roles could not be removed from these members for unexpected reasons: \n' + '\n'.join(str(member)+' ||(ID: '+str(member.id)+')||' for member in member_failures) if member_failures else None
-
-        if role_update or member_update:
-            update = str(role_update or '') + '\n' + str(member_update or '')
-            await ctx.author.send(update)
+        await self._modify_roles(ctx, 'remove_roles', entities=mentions, affixes=roles)
 
     @commands.command(aliases=['purge'])
     @commands.guild_only()
-    @commands.cooldown(rate=1, per=5.0, type=commands.BucketType.member)
+    @commands.cooldown(rate=1, per=10.0, type=commands.BucketType.channel)
     @checks.manage_messages()
     async def cleanup(self, ctx, mentions: commands.Greedy[discord.Member], limit: int = 100):
         """Cleans up messages in the channel.
@@ -422,7 +258,7 @@ class Mod(commands.Cog):
         Otherwise, all messages within the limit are deleted.
         
         Please note that this is a very expensive operation, so it may take a while for messages to be cleaned up.
-        As a result, you can only cleanup messages once every 5 seconds.
+        As a result, channels can only be cleaned up once every 10 seconds.
 
         Members with the Manage Messages permission have a limit of 100 messages.
         Members with the Manage Server permission have a limit of 1000 messages.
@@ -513,11 +349,15 @@ class Mod(commands.Cog):
     @commands.Cog.listener()
     async def on_message_delete(self, message):
         self._deleted_messages[message.channel.id] = message
+        
+    @commands.Cog.listener()
+    async def on_message_edit(self, before, _):
+        self._deleted_messages[before.channel.id] = before
 
     @commands.command()
     @commands.guild_only()
     async def snipe(self, ctx, channel: discord.TextChannel = None):
-        """Retrieves the most recent deleted message in a channel."""
+        """Retrieves the most recent edited/deleted message in a channel."""
         if channel is None:
             channel = ctx.channel
 
@@ -541,37 +381,13 @@ class Mod(commands.Cog):
     @checks.is_mod()
     async def clone(self, ctx, channels: commands.Greedy[discord.TextChannel], *, reason: Optional[Reason]):
         """Clones text channels in the server, including permissions, up to 5 at once.
-        
-        The command author will be notified of channels that were not cloned unexpectedly.
 
         To use this command, you must have the Manage Server permission.
         The bot must have the Manage Server permission for this command to run.
         """
         if not channels:
             channels = [ctx.channel]
-        if reason is None:
-            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
-        
-        channels = list(OrderedDict.fromkeys(channels))
-        if len(channels) > 5:
-            await ctx.reply('You can only clone up to 5 channels at a time.')
-        
-        channels = channels[:5]
-
-        failed = 0
-        command_failures = []
-        for channel in channels:
-            try:
-                new = await channel.clone(reason=reason)
-            except errors as error:
-                command_failures.append(channel)
-                failed += 1
-        
-        await ctx.reply(f'Cloned {len(channels) - failed}/{len(channels)} channels.')
-
-        if command_failures:
-            update = 'These channels could not be cloned for unexpected reasons: \n' + '\n'.join(str(channel)+' ||(ID: '+str(channel.id)+')||' for channel in command_failures)
-            await ctx.author.send(update)
+        await self._modify_access(ctx, 'clone', entities=channels, bucket='channels', max_length=5, reason=reason)
 
 
 def setup(bot):

@@ -1,14 +1,12 @@
 import time
 
-from .utils import checks
 from .utils.paginator import Embed, Pages
 
 from discord.ext import commands, menus
-import discord
 
 class HelpPageSource(menus.ListPageSource):
     def __init__(self, help_command, commands, context):
-        super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=3)
+        super().__init__(entries=sorted(commands.keys(), key=lambda c: c.qualified_name), per_page=6)
         self.help_command = help_command
         self.commands = commands
         self.context = context
@@ -129,30 +127,11 @@ class Meta(commands.Cog):
         bot.help_command = Help()
         bot.help_command.cog = self
     
-    @commands.command(aliases=['hi'])
-    async def hello(self, ctx):
-        """Displays the intro message."""
-        owner = self.bot.get_user(int(self.bot.owner_id))
-        await ctx.send(f'Hello! I\'m a robot! {owner} made me. Use `?help` to learn what I can do!')
-    
     @commands.command()
     async def ping(self, ctx):
         """Replies with the bot latency."""
         timing = round(1000*self.bot.latency, 2)
         await ctx.reply(f'Pong. ({timing} ms)')
-    
-    @commands.command()
-    @commands.dm_only()
-    @commands.cooldown(rate=1, per=60.0, type=commands.BucketType.member)
-    async def suggest(self, ctx, *, suggestion):
-        """Requests the developer to fix or add a feature to the bot.
-        
-        Please only use this command for the above purpose. 
-        You can only give feedback once a minute. Misuse will lead to a blacklist.
-        """
-        owner = self.bot.get_user(self.bot.owner_id)
-        await owner.send(f'{ctx.author} suggested "{suggestion}".')
-        await ctx.send('Your suggestion has been recorded.')
     
     @commands.Cog.listener()
     async def on_connect(self):
@@ -171,7 +150,7 @@ class Meta(commands.Cog):
         }
         
         uptime = f"{attrs['h'][(hrs, 2)[hrs > 1]]}{attrs['m'][(mins, 2)[mins > 1]]}{attrs['s'][(secs, 2)[secs > 1]]}"[:-2]
-        await ctx.reply('Uptime: **'+uptime+'**.')
+        await ctx.reply(uptime)
 
 
 def setup(bot):

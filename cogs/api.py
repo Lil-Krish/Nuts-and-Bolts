@@ -12,18 +12,15 @@ from discord.ext import commands, menus
 import discord
 
 class YouTubePageSource(menus.ListPageSource):
-    def __init__(self, videos, context):
-        super().__init__(entries=videos, per_page=6)
+    def __init__(self, data, context):
+        super().__init__(entries=data, per_page=6)
         self.context = context
     
     async def format_page(self, menu, entries):
         embed = Embed(title='YouTube Search', ctx=self.context)
         embed.set_thumbnail(url='https://i.postimg.cc/9QXFxh8X/youtube.png')
-        for video in entries:
-            title, url = video['title'], video['link']
-            length, views = video['accessibility']['duration'], video['viewCount']['text']
-            channel = video['channel']['name']
-            embed.add_field(name=channel, value=f'[{title}]({url} "{length}\n{views}")')
+        for data in entries:
+            embed.add_field(name=data[0], value=data[1])
         
         max_pages = self.get_max_pages()
         if max_pages > 1:
@@ -56,13 +53,26 @@ class API(commands.Cog):
         embed = Embed(title='Translator', ctx=ctx)
         embed.set_thumbnail(url='https://i.postimg.cc/mDqNXRkM/translate.png')
 
-        src = googletrans.LANGUAGES.get(result.src, '(Auto-Detected)').title()
+        src = googletrans.LANGUAGES.get(result.src, 'Auto Detected').title()
         dest = googletrans.LANGUAGES.get(result.dest, 'Unknown').title()
         embed.add_field(name=f'From {src}', value=result.origin, inline=False)
         embed.add_field(name=f'To {dest}', value=result.text, inline=False)
 
         await ctx.send(embed=embed)
-
+    
+    async def retrieve_videos(self, query: Optional[str], *, amount: Optional[int] = 12):
+        videos = await self.loop.run_in_executor(None, VideosSearch, query, amount)
+        return videos.result(mode=ResultMode.dict)['result']
+    
+    def format_videos(self, videos: Optional[dict]):
+        formatted = []
+        for video in videos:
+            title, url = video['title'], video['link']
+            length, views = video['accessibility']['duration'], video['viewCount']['text']
+            channel = video['channel']['name']
+            formatted.append((channel ,f'[{title}]({url} "{length}\n{views}")'))
+        return formatted
+    
     @commands.command(aliases=['yt'])
     async def youtube(self, ctx, *, query: Optional[str]):
         """Queries Youtube and retrieves the top videos.
@@ -74,12 +84,10 @@ class API(commands.Cog):
             if ref and ref.resolved.content and isinstance(ref.resolved, discord.Message):
                 query = ref.resolved.content
             else:
-                return await ctx.reply('Please provide a message to query.')
+                return await ctx.reply('Please provide a search query.')
 
-        videos = await self.loop.run_in_executor(None, VideosSearch, query, 12)
-        result = videos.result(mode=ResultMode.dict)['result']
-
-        menu = Pages(YouTubePageSource(result, ctx), ctx)
+        result = await self.retrieve_videos(query)
+        menu = Pages(YouTubePageSource(self.format_videos(result), ctx), ctx)
         await menu.start(ctx)
 
     def generate_file(self, tex):
@@ -163,12 +171,9 @@ class API(commands.Cog):
         embed.set_thumbnail(url=attrs[access][1])
 
         names = ['Real Time', 'User Time', 'Sys. Time', 'CPU Share', 'Exit Code']
-
         read = str(result.debug.decode('utf-8'))
-
         cut = read.index(names[0].capitalize())
         data = read[cut-1:].split('\n')
-
         times = []
         for idx in range(1, 5):
             times.append(''.join(data[idx][11:].split(' ')))

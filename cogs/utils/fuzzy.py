@@ -1,5 +1,4 @@
 import re
-import heapq
 from difflib import SequenceMatcher
 
 _lower_bound = 0.75
@@ -19,12 +18,11 @@ def _partial_ratio(one, two):
     blocks = pair.get_matching_blocks()
 
     scores = []
-    for i, j, n in blocks:
-        start = max(j - i, 0)
+    for i, j, _ in blocks:
+        start = max(j-i, 0)
         end = start + len(sh)
         sm = SequenceMatcher(None, sh, lo[start:end])
         ratio = sm.ratio()
-
         scores.append(ratio)
 
     return int(round(100 * max(scores))) > _lower_bound
@@ -44,8 +42,8 @@ def _quick_token_sort_ratio(one, two):
     return _quick_ratio(one, two) > _lower_bound
 
 def _partial_token_sort_ratio(one, two):
-    one, two = _sort_tokens(one), _sort_tokens(two)
-    return _partial_ratio(one, two) > _lower_bound
+    sh, lo = _sort_tokens(one), _sort_tokens(two)
+    return _partial_ratio(sh, lo) > _lower_bound
 
 def _fuzzy_test(one, two):
     return (_ratio(one, two) or _quick_ratio(one, two) or _partial_ratio(one, two)

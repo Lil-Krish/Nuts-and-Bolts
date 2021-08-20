@@ -94,8 +94,7 @@ class Tags(commands.Cog):
             self._tags[ctx.guild.id][ctx.author.id].append([[name], content, ctx.author])
         except KeyError:
             self._tags[ctx.guild.id][ctx.author.id] = [[[name], content, ctx.author]]
-        
-        await ctx.reply(f'Tag "{name}" created.')
+        await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
 
     @tag.command()
     @commands.guild_only()
@@ -104,15 +103,14 @@ class Tags(commands.Cog):
         check = self._tags[ctx.guild.id]
         match = fuzzy.find(old_name, check)
         if not match[0]:
-            raise TagNotFound(name, match)
+            raise TagNotFound(old_name, match)
         
         idx = check[match[2]].index(match[1])
         locale = self._tags[ctx.guild.id][match[2]][idx][0]
 
         if new_name not in locale:
             self._tags[ctx.guild.id][match[2]][idx][0].append(new_name)
-        
-        await ctx.reply(f'Alias "{new_name}" created for "{old_name}" tag.')
+        await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
     
     @tag.command()
     @commands.guild_only()
@@ -129,8 +127,7 @@ class Tags(commands.Cog):
         
         idx = check[match[2]].index(match[1])
         self._tags[ctx.guild.id][match[2]][idx][1] = new_content
-
-        await ctx.reply(f'Edited tag "{name}".')
+        await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
     
     @tag.command(aliases=['remove'])
     @commands.guild_only()
@@ -151,8 +148,7 @@ class Tags(commands.Cog):
         
         idx = check[match[2]].index(match[1])
         del self._tags[ctx.guild.id][match[2]][idx]
-
-        await ctx.reply(f'Deleted tag "{name}".')
+        await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
     
     @tag.command()
     @commands.guild_only()
@@ -177,8 +173,7 @@ class Tags(commands.Cog):
             self._tags[ctx.guild.id][mention.id].append(deleted)
         except KeyError:
             self._tags[ctx.guild.id][mention.id] = [deleted]
-        
-        await ctx.reply(f'Transferred "{name}" tag ownership to {mention}.')
+        await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
     
     @commands.command()
     @commands.guild_only()

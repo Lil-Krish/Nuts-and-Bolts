@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional
 
 from discord.ext import menus
 import discord
@@ -18,8 +19,7 @@ class Embed(discord.Embed):
         
         self.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar_url)
 
-    def add_field(self, **kwargs):
-        name, value, inline = kwargs.get('name', '\u200b'), kwargs.get('value', '\u200b'), kwargs.get('inline', True)
+    def add_field(self, name: Optional[str] = '\u200b', value: Optional[str] = '\u200b', inline: Optional[bool] = True):
         super().add_field(name=name, value=value, inline=inline)
 
 
@@ -29,7 +29,7 @@ class Pages(menus.MenuPages):
         self.context = context
     
     @menus.button('\N{INFORMATION SOURCE}\ufe0f', position=menus.Last(3))
-    async def info(self, payload):
+    async def info(self, _):
         """Shows info about pagination."""
 
         embed = Embed(title='Pagnination Info', ctx=self.context)

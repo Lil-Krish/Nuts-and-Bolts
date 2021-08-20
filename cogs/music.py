@@ -178,6 +178,7 @@ class Music(commands.Cog):
                 await ctx.reply('Added to queue.')
     
     @commands.group(invoke_without_command=True)
+    @commands.guild_only()
     async def queue(self, ctx):
         """Shows the server-wide music queue."""
         if not self._queue[ctx.guild.id]:
@@ -200,6 +201,7 @@ class Music(commands.Cog):
             await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
     
     @commands.command(aliases=['voteskip'])
+    @commands.guild_only()
     async def skip(self, ctx):
         """Skips the song playing if at least 75% of VC members agree."""
         if await self._check_conditions(ctx):
@@ -224,6 +226,7 @@ class Music(commands.Cog):
                 await ctx.reply('Could not skip.')
     
     @commands.command()
+    @commands.guild_only()
     @checks.is_mod()
     async def forceskip(self, ctx):
         """Forcefully skips the song playing.
@@ -241,6 +244,7 @@ class Music(commands.Cog):
             await ctx.reply('Skipped song.')   
     
     @commands.command()
+    @commands.guild_only()
     async def pause(self, ctx):
         """Pauses any music playing in VC."""
         if await self._check_conditions(ctx):
@@ -251,6 +255,7 @@ class Music(commands.Cog):
                 await ctx.reply('Music is not playing.')
     
     @commands.command()
+    @commands.guild_only()
     async def resume(self, ctx):
         """Resumes paused music in VC."""
         if await self._check_conditions(ctx):
@@ -261,6 +266,7 @@ class Music(commands.Cog):
                 await ctx.reply('Music is not paused.')
     
     @commands.command()
+    @commands.guild_only()
     async def stop(self, ctx):
         """Stops any music playing in VC."""
         if await self._check_conditions(ctx):

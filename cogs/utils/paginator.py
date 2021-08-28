@@ -7,11 +7,9 @@ import discord
 class Embed(discord.Embed):
     def __init__(self, **kwargs):
         title, description, ctx = kwargs.get('title', ''), kwargs.get('description', ''), kwargs['ctx']
-        
         snowflake = 16775930
-
+        
         colour = hash(kwargs.get('author', ctx.author).colour)
-
         if colour == hash(discord.Colour.default()):
             colour = snowflake
         
@@ -31,9 +29,7 @@ class Pages(menus.MenuPages):
     @menus.button('\N{INFORMATION SOURCE}\ufe0f', position=menus.Last(3))
     async def info(self, _):
         """Shows info about pagination."""
-
         embed = Embed(title='Pagnination Info', ctx=self.context)
-
         info = []
         for (emoji, button) in self.buttons.items():
             info.append(f'{emoji}: {button.action.__doc__.capitalize()}')

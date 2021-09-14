@@ -18,8 +18,8 @@ class ContentCooldown(commands.CooldownMapping):
 
 class SpamCheck:
     def __init__(self):
-        self.short_check = ContentCooldown.from_cooldown(15, 18.0, commands.BucketType.member)
-        self.long_check = commands.CooldownMapping.from_cooldown(30, 37.0, commands.BucketType.channel)
+        self.short_check = ContentCooldown.from_cooldown(15, 15.0, commands.BucketType.member)
+        self.long_check = commands.CooldownMapping.from_cooldown(30, 32.0, commands.BucketType.channel)
     
     def is_spamming(self, message):
         if message.guild is None:
@@ -52,8 +52,9 @@ class Mod(commands.Cog):
     async def on_message(self, message):
         checker = self._spam_check[message.guild.id] if message.guild else self._spam_check[message.channel.id]
         if checker.is_spamming(message):
+            if message.author not in self.bot.blocked['global']:
+                await message.author.send('You have been globally blocked from using this bot for one day due to spamming.')
             self.bot.blocked['global'].add(message.author)
-            await message.author.send('You have been banned from the relevant server and globally blocked from using this bot for one day due to spamming.')
             if message.guild:
                 await message.guild.ban(message.author, reason='Spam autoban.')
     

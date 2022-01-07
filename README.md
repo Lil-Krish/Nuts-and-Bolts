@@ -1,2 +1,2 @@
 # Nuts and Bolts
-A personal Discord bot.
+A bot that runs on Discord hosted on Heroku.

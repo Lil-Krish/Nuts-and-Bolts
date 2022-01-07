@@ -5,7 +5,6 @@ from discord.ext import commands
 
 class RNG(commands.Cog):
     """(Pseudo) RNG commands."""
-
     def __init__(self, bot):
         self.bot = bot
     

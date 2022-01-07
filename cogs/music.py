@@ -113,13 +113,14 @@ class Music(commands.Cog):
     
     async def _check_conditions(self, ctx):
         if self._bound.get(ctx.guild.id) and ctx.channel != self._bound[ctx.guild.id]:
-            return await ctx.reply(f'I am currently bound to {self._bound[ctx.guild.id].mention}.')
+            await ctx.reply(f'I am currently bound to {self._bound[ctx.guild.id].mention}.')
+            return False
         try:
             if ctx.author in ctx.voice_client.channel.members:
                 return True
             else:
                 await ctx.reply('You are not in the VC that I am connected to.')
-        except AttributeError as e:
+        except AttributeError:
             await ctx.reply('I am not currently connected to a VC.')
         return False
     
@@ -171,7 +172,7 @@ class Music(commands.Cog):
                     try:
                         ctx.voice_client.stop()
                     finally:
-                        self._queue[ctx.guild.id].appendleft(videos[change])
+                        self._queue[ctx.guild.id][0] = videos[change]
                         self._play(ctx, videos[change])
             else:
                 self._queue[ctx.guild.id].append(videos[change])
@@ -191,10 +192,12 @@ class Music(commands.Cog):
         await menu.start(ctx)
     
     @queue.command(aliases=['remove'])
-    async def delete(self, ctx, index):
-        """Deletes an item from the queue."""
-        if index > len(self._queue[ctx.guild.id]) or index < 0:
+    async def delete(self, ctx, index: int):
+        """Deletes an item (one-indexed) from the queue."""
+        if index > len(self._queue[ctx.guild.id]) or index < 1:
             return await ctx.reply(f"The server music queue does not contain index {index}")
+        elif index < 2:
+            return await ctx.reply("The song currently playing cannot be deleted from the queue.")
         
         if await self._check_conditions(ctx):
             del self._queue[ctx.guild.id][index-1]
@@ -203,7 +206,7 @@ class Music(commands.Cog):
     @commands.command(aliases=['voteskip'])
     @commands.guild_only()
     async def skip(self, ctx):
-        """Skips the song playing if at least 75% of VC members agree."""
+        """Skips the song playing with the approval of at least 75% of VC members."""
         if await self._check_conditions(ctx):
             if not len(self._queue[ctx.guild.id]) > 1:
                 return await ctx.reply('No more songs in queue.')
@@ -219,8 +222,6 @@ class Music(commands.Cog):
             if len(ctx.voice_client.channel.members) == 2 or (ups-1)/(len(ctx.voice_client.channel.members)-1) > 3/4:
                 if ctx.voice_client.is_playing():
                     ctx.voice_client.stop()
-                self._queue[ctx.guild.id].popleft()
-                self._play(ctx, self._queue[ctx.guild.id][0])
                 await ctx.reply('Skipped song.')
             else:
                 await ctx.reply('Could not skip.')
@@ -239,8 +240,6 @@ class Music(commands.Cog):
 
             if ctx.voice_client.is_playing():
                 ctx.voice_client.stop()
-            self._queue[ctx.guild.id].popleft()
-            self._play(ctx, self._queue[ctx.guild.id][0])
             await ctx.reply('Skipped song.')   
     
     @commands.command()

@@ -12,7 +12,7 @@ class HelpPageSource(menus.ListPageSource):
         self.context = context
     
     async def format_page(self, menu, cogs):
-        description = f'Use `?help [command]` for more info on a command group.'
+        description = f'Use `?help [command]` for more information on a command group.'
         embed = Embed(title='Categories', description=description, ctx=self.context)
         
         for cog in cogs:

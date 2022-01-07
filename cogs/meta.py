@@ -150,7 +150,7 @@ class Meta(commands.Cog):
         }
         
         uptime = f"{attrs['h'][(hrs, 2)[hrs > 1]]}{attrs['m'][(mins, 2)[mins > 1]]}{attrs['s'][(secs, 2)[secs > 1]]}"[:-2]
-        await ctx.reply(uptime)
+        await ctx.reply(f"{uptime}.")
 
 
 def setup(bot):

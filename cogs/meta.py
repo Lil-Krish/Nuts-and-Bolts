@@ -74,7 +74,7 @@ class Help(commands.HelpCommand):
             aliases = command.name if not parent else f'{parent} {command.name}'
         return f'{aliases} {command.signature}'
     
-    async def send_bot_help(self, mapping):
+    async def send_bot_help(self, _):
         bot = self.context.bot
         entries = await self.filter_commands(bot.commands, sort=True)
 
@@ -118,6 +118,9 @@ class Help(commands.HelpCommand):
         embed.description = command.help
         embed.set_footer(text='Use ?help to view a list of all commands.')
         await self.context.send(embed=embed)
+        
+    async def send_error_message(self, error):
+        await self.context.reply(error)
 
 
 class Meta(commands.Cog):

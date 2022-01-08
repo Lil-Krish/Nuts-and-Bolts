@@ -252,7 +252,7 @@ class Mod(commands.Cog):
     @commands.guild_only()
     @commands.cooldown(rate=1, per=10.0, type=commands.BucketType.channel)
     @checks.manage_messages()
-    async def cleanup(self, ctx, mentions: commands.Greedy[discord.Member], limit: int = 100):
+    async def cleanup(self, ctx, mentions: commands.Greedy[discord.Member], limit: Optional[int] = 100):
         """Cleans up messages in the channel.
         
         If members are mentioned, this commands searches the channel history for messages sent by these members.
@@ -305,9 +305,9 @@ class Mod(commands.Cog):
             else:
                 mention = ctx.author
 
-        desc = 'User ID: '+str(mention.id)
+        desc = f"User ID: ||{str(mention.id)}||"
         if ctx.guild and mention.nick:
-            desc += '\n'+'Nickname: '+mention.nick
+            desc += f"\n Nickname: {mention.nick}"
         
         attrs = {
             'online': 'https://i.postimg.cc/Ghvwxrsk/online.png',
@@ -342,8 +342,9 @@ class Mod(commands.Cog):
         embed.set_thumbnail(url='attachment://pfp.png')
         embed.add_field(name='Creation Date', value=mention.created_at.strftime('%b %d, %Y'))
         embed.add_field(name='Join Date', value=mention.joined_at.strftime('%b %d, %Y'))
-        embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in mention.roles[5:0:-1]))
-
+        if len(mention.roles) > 1:
+            embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in mention.roles[5:0:-1]))
+        
         await ctx.send(file=avatar, embed=embed)
 
     @commands.Cog.listener()

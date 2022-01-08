@@ -1,7 +1,7 @@
 import datetime, aiohttp
 from typing import Optional
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageDraw
 from collections import Counter, defaultdict, OrderedDict
 from operator import attrgetter
 
@@ -289,10 +289,7 @@ class Mod(commands.Cog):
                     break
             
             response = f'Deleted {sum(number for _, number in cache)} messages.\n' + '\n'.join('- '+str(member)+': '+str(number) for member, number in cache)
-            try:
-                await ctx.reply(response)
-            except discord.HTTPException:
-                await ctx.send(response)
+            await ctx.reply(response)
 
     @commands.command(aliases=['whois'])
     @commands.guild_only()
@@ -319,8 +316,7 @@ class Mod(commands.Cog):
             'offline': 'https://i.postimg.cc/1Xx78nBb/offline.png',
         }
 
-        small, large = 40, 125
-        
+        small, large, shift = (30, 125, 5)
         async with aiohttp.ClientSession() as session:
             async with session.get(attrs[str(mention.status)]) as response:
                 buffer = BytesIO(await response.read())
@@ -331,7 +327,10 @@ class Mod(commands.Cog):
         profile = Image.open(data).convert('RGBA')
 
         profile = profile.resize((large, large))
-        profile.paste(status, (large-small, large-small), mask=status)
+        draw = ImageDraw.Draw(profile)
+        points = [(large-small-2*shift, large-small-2*shift), (large, large)]
+        draw.ellipse(points, fill=(35, 39, 42, 255))
+        profile.paste(status, (large-small-shift, large-small-shift), mask=status)
 
         embed = Embed(title=str(mention), description=desc, author=mention, ctx=ctx)
 
@@ -343,7 +342,7 @@ class Mod(commands.Cog):
         embed.set_thumbnail(url='attachment://pfp.png')
         embed.add_field(name='Creation Date', value=mention.created_at.strftime('%b %d, %Y'))
         embed.add_field(name='Join Date', value=mention.joined_at.strftime('%b %d, %Y'))
-        embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in mention.roles[1:6]))
+        embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in mention.roles[5:0:-1]))
 
         await ctx.send(file=avatar, embed=embed)
 

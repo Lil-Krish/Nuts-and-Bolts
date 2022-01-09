@@ -47,6 +47,8 @@ class NutsandBolts(commands.AutoShardedBot):
             if isinstance(original, discord.Forbidden):
                 return await ctx.reply('The bot does not have permission to execute this command.')
             elif isinstance(original, discord.HTTPException):
+                if isinstance(original, discord.NotFound):
+                    return await ctx.reply('The requested entity was not found.')
                 return await ctx.reply('An unexpected error occurred. Please try again later.')
             elif isinstance(original, DownloadError):
                 return await ctx.reply('There was an error downloading the requested video.')

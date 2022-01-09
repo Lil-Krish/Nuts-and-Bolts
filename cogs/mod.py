@@ -1,5 +1,5 @@
 import datetime, aiohttp
-from typing import Optional
+from typing import Optional, Union
 from io import BytesIO
 from PIL import Image, ImageDraw
 from collections import Counter, defaultdict, OrderedDict
@@ -81,8 +81,8 @@ class Mod(commands.Cog):
         dump = [[] for _ in range(6)]
         for entity in entities:
             try:
-                is_int = (type(entity) == int)
-                if  is_int or checks.can_use(ctx, ctx.author, entity):
+                is_int = isinstance(entity, int)
+                if is_int or checks.can_use(ctx, ctx.author, entity):
                     used = entity
                     if is_int:
                         entity = (await ctx.guild.fetch_ban(discord.Object(id=entity))).user
@@ -293,21 +293,23 @@ class Mod(commands.Cog):
 
     @commands.command(aliases=['whois'])
     @commands.guild_only()
-    async def search(self, ctx, mention: discord.Member = None):
-        """Searches info about a member in the server.
+    async def search(self, ctx, member: Optional[Union[discord.Member, int]] = None):
+        """Searches information about a member through mention or ID.
         
         Replying with this command will search the referred message author.
         """
-        if mention is None:
+        if member is None:
             ref = ctx.message.reference
             if ref and isinstance(ref.resolved, discord.Message):
-                mention = ref.resolved.author
+                member = ref.resolved.author
             else:
-                mention = ctx.author
+                member = ctx.author
+        elif isinstance(member, int):
+            member = await self.bot.fetch_user(member)
 
-        desc = f"User ID: ||{str(mention.id)}||"
-        if ctx.guild and mention.nick:
-            desc += f"\n Nickname: {mention.nick}"
+        desc = f"User ID: ||{str(member.id)}||"
+        if ctx.guild and member in ctx.guild.members and member.nick:
+            desc += f"\n Nickname: {member.nick}"
         
         attrs = {
             'online': 'https://i.postimg.cc/Ghvwxrsk/online.png',
@@ -316,23 +318,25 @@ class Mod(commands.Cog):
             'offline': 'https://i.postimg.cc/1Xx78nBb/offline.png',
         }
 
-        small, large, shift = (30, 125, 5)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(attrs[str(mention.status)]) as response:
-                buffer = BytesIO(await response.read())
-                status = Image.open(buffer).resize((small, small)).convert('RGBA')
-        
-        asset = mention.avatar_url_as(size=128)
+        asset = member.avatar_url_as(size=128)
         data = BytesIO(await asset.read())
         profile = Image.open(data).convert('RGBA')
 
+        small, large, shift = (30, 125, 5)
         profile = profile.resize((large, large))
-        draw = ImageDraw.Draw(profile)
-        points = [(large-small-2*shift, large-small-2*shift), (large, large)]
-        draw.ellipse(points, fill=(35, 39, 42, 255))
-        profile.paste(status, (large-small-shift, large-small-shift), mask=status)
+        if member in ctx.guild.members:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(attrs[str(member.status)]) as response:
+                    buffer = BytesIO(await response.read())
+                    status = Image.open(buffer).resize((small, small)).convert('RGBA')
+            
+            draw = ImageDraw.Draw(profile)
+            points = [(large-small-2*shift, large-small-2*shift), (large, large)]
+            draw.ellipse(points, fill=(35, 39, 42, 255))
+            
+            profile.paste(status, (large-small-shift, large-small-shift), mask=status)
 
-        embed = Embed(title=str(mention), description=desc, author=mention, ctx=ctx)
+        embed = Embed(title=str(member), description=desc, author=member, ctx=ctx)
 
         with BytesIO() as binary:
             profile.save(binary, 'PNG')
@@ -340,10 +344,11 @@ class Mod(commands.Cog):
             avatar = discord.File(fp=binary, filename='pfp.png')
         
         embed.set_thumbnail(url='attachment://pfp.png')
-        embed.add_field(name='Creation Date', value=mention.created_at.strftime('%b %d, %Y'))
-        embed.add_field(name='Join Date', value=mention.joined_at.strftime('%b %d, %Y'))
-        if len(mention.roles) > 1:
-            embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in mention.roles[5:0:-1]))
+        embed.add_field(name='Creation Date', value=member.created_at.strftime('%b %d, %Y'))
+        if member in ctx.guild.members:
+            embed.add_field(name='Join Date', value=member.joined_at.strftime('%b %d, %Y'))
+            if len(member.roles) > 1:
+                embed.add_field(name='Top Roles', value='\n'.join(role.mention for role in member.roles[5:0:-1]))
         
         await ctx.send(file=avatar, embed=embed)
 
@@ -357,7 +362,7 @@ class Mod(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    async def snipe(self, ctx, channel: discord.TextChannel = None):
+    async def snipe(self, ctx, channel: Optional[discord.TextChannel] = None):
         """Retrieves the most recent edited/deleted message in a channel."""
         if channel is None:
             channel = ctx.channel

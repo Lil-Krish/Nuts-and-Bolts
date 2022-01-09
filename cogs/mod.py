@@ -64,7 +64,7 @@ class Mod(commands.Cog):
             await ctx.reply(f'You can only execute this action on {max_length} {bucket} at a time.')
         return data[:max_length]
     
-    async def _modify_access(self, ctx, action, *, entities, bucket: Optional[str] = 'members', max_length: Optional[int] = 10, reason: Optional[Reason] = None):
+    async def _modify_access(self, ctx, action, *, entities, bucket: Optional[str] = 'members', max_length: Optional[int] = 10, reason: Optional[Reason]):
         attrs = {
             'block' : 'add',
             'unblock' : 'remove',
@@ -118,7 +118,9 @@ class Mod(commands.Cog):
         
         if val:
             embed.add_field(name=f'{attrs[-1]} Success', value=val)
-        await ctx.send(embed=embed)
+        if len(embed.fields):
+            return await ctx.send(embed=embed)
+        await ctx.reply("Please provide at least one member to perform this action on.")
     
     @commands.command()
     @commands.guild_only()
@@ -187,9 +189,12 @@ class Mod(commands.Cog):
         """
         await self._modify_access(ctx, 'unban', entities=ids, reason=reason)
     
-    async def _modify_roles(self, ctx, action, *, entities, affixes, max_length: Optional[int] = 5, reason: Optional[Reason] = None):
+    async def _modify_roles(self, ctx, action, *, entities, affixes, max_length: Optional[int] = 5, reason: Optional[Reason]):
         entities = await self._modify_list(ctx, entities, max_length)
         affixes = await self._modify_list(ctx, affixes, 'roles', max_length)
+        
+        if reason is None:
+            reason = f'{ctx.author} (ID: {ctx.author.id}): No reason provided.'
         
         errors = (discord.Forbidden, discord.HTTPException, commands.BadArgument)
         working = {}
@@ -224,7 +229,9 @@ class Mod(commands.Cog):
                         embed.add_field(name=f'{attrs[0]} {affix}', value=causes[dump.index(signal)], inline=False)
                         break
         
-        await ctx.send(embed=embed)
+        if len(embed.fields):
+            return await ctx.send(embed=embed)
+        await ctx.reply("Please provide at least one member and one role to perform this action on.")
     
     @commands.command(aliases=['add'])
     @commands.guild_only()
@@ -235,7 +242,7 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
         """
-        await self._modify_roles(ctx, 'add_roles', entities=mentions, affixes=roles)
+        await self._modify_roles(ctx, 'add_roles', entities=mentions, affixes=roles, reason=reason)
     
     @commands.command(aliases=['remove'])
     @commands.guild_only()
@@ -246,7 +253,7 @@ class Mod(commands.Cog):
         To use this command, you must have the Manage Roles permission.
         The bot must have the Manage Roles permission for this command to run.
         """
-        await self._modify_roles(ctx, 'remove_roles', entities=mentions, affixes=roles)
+        await self._modify_roles(ctx, 'remove_roles', entities=mentions, affixes=roles, reason=reason)
 
     @commands.command(aliases=['purge'])
     @commands.guild_only()
@@ -293,7 +300,7 @@ class Mod(commands.Cog):
 
     @commands.command(aliases=['whois'])
     @commands.guild_only()
-    async def search(self, ctx, member: Optional[Union[discord.Member, int]] = None):
+    async def search(self, ctx, member: Optional[Union[discord.Member, int]]):
         """Searches information about a member through mention or ID.
         
         Replying with this command will search the referred message author.
@@ -362,8 +369,8 @@ class Mod(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    async def snipe(self, ctx, channel: Optional[discord.TextChannel] = None):
-        """Retrieves the most recent edited/deleted message in a channel."""
+    async def snipe(self, ctx, channel: Optional[discord.TextChannel]):
+        """Retrieves the most recent deleted/edited message in a channel."""
         if channel is None:
             channel = ctx.channel
 

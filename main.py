@@ -27,15 +27,12 @@ class NutsandBolts(commands.AutoShardedBot):
         self.blocked = defaultdict(set)
     
     async def on_message(self, message):
+        blocked = self.blocked['global'].copy()
         if message.guild:
-            blocked = message.author in self.blocked['global'].union(self.blocked[message.guild.id])
-        else:
-            blocked = message.author in self.blocked['global']
+            blocked.update(self.blocked[message.guild.id])
         
-        if message.author.bot or blocked:
-            return
-        
-        await self.process_commands(message)
+        if not (message.author.bot or message.author in blocked):
+            await self.process_commands(message)
     
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):

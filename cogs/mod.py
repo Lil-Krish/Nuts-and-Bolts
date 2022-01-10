@@ -130,7 +130,7 @@ class Mod(commands.Cog):
         
         To use this command, you must have the Ban Members permission.
         """
-        await self._modify_access(ctx, 'block', entities=mentions);
+        await self._modify_access(ctx, 'block', entities=mentions, reason=None);
     
     @commands.command()
     @commands.guild_only()
@@ -141,7 +141,7 @@ class Mod(commands.Cog):
 
         To use this command, you must have the Ban Members permission.
         """
-        await self._modify_access(ctx, 'unblock', entities=mentions);
+        await self._modify_access(ctx, 'unblock', entities=mentions, reason=None);
     
     @commands.command()
     @commands.guild_only()

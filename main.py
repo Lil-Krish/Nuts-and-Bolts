@@ -23,7 +23,7 @@ class NutsandBolts(commands.AutoShardedBot):
         for extension in initial_extensions:
             self.load_extension(extension)
         
-        self.owner_id, self._token = os.environ['OWNER_ID'], os.environ['TOKEN']
+        self.owner_id, self.__token = os.environ['OWNER_ID'], os.environ['TOKEN']
         self.blocked = defaultdict(set)
     
     async def on_message(self, message):
@@ -56,7 +56,7 @@ class NutsandBolts(commands.AutoShardedBot):
         await ctx.reply(f'{error.__class__.__name__}: {error}')
     
     def run(self):
-        super().run(self._token, reconnect=True)
+        super().run(self.__token, reconnect=True)
 
 
 def main():

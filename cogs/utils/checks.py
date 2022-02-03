@@ -25,21 +25,11 @@ def is_mod():
         return await _check_permissions(ctx, {'manage_guild': True})
     return commands.check(wrap)
 
-def is_admin():
-    async def wrap(ctx):
-        return await _check_permissions(ctx, {'administrator': True})
-    return commands.check(wrap)
-
-def is_owner():
-    def wrap(ctx):
-        return ctx.guild is not None and ctx.guild.owner == ctx.author
-    return commands.check(wrap)
-
 def manage_messages():
     async def wrap(ctx):
         return await _check_permissions(ctx, {'manage_messages': True, 'read_message_history': True})
     return commands.check(wrap)
-    
+
 def manage_roles():
     async def wrap(ctx):
         return await _check_permissions(ctx, {'manage_roles': True})

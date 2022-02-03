@@ -12,7 +12,7 @@ import discord
 
 class MusicMenu(menus.Menu):
     def __init__(self, data):
-        super().__init__(timeout=15.0, clear_reactions_after=True)
+        super().__init__(timeout=10.0, clear_reactions_after=True)
         self.formatted = data
         self.index = 0
     
@@ -214,12 +214,13 @@ class Music(commands.Cog):
             ups = 0
             if len(ctx.voice_client.channel.members) > 2:
                 await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
-                await asyncio.sleep(15.0)
+                await asyncio.sleep(5.0)
                 
                 for reaction in ctx.message.reactions:
-                    ups += (reaction.emoji == '\N{THUMBS UP SIGN}')
-                
-            if len(ctx.voice_client.channel.members) == 2 or (ups-1)/(len(ctx.voice_client.channel.members)-1) > 3/4:
+                    if reaction.emoji == '\N{THUMBS UP SIGN}':
+                        ups += reaction.count
+            
+            if len(ctx.voice_client.channel.members) == 2 or (ups-1)/(len(ctx.voice_client.channel.members)-1) >= 3/4:
                 if ctx.voice_client.is_playing():
                     ctx.voice_client.stop()
                 await ctx.reply('Skipped song.')
@@ -237,12 +238,12 @@ class Music(commands.Cog):
         if await self._check_conditions(ctx):
             if not len(self._queue[ctx.guild.id]) > 1:
                 return await ctx.reply('No more songs in queue.')
-
+            
             if ctx.voice_client.is_playing():
                 ctx.voice_client.stop()
             await ctx.reply('Skipped song.')   
     
-    @commands.command()
+    @commands.command(aliases=["stop"])
     @commands.guild_only()
     async def pause(self, ctx):
         """Pauses any music playing in VC."""
@@ -263,17 +264,6 @@ class Music(commands.Cog):
                 await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
             else:
                 await ctx.reply('Music is not paused.')
-    
-    @commands.command()
-    @commands.guild_only()
-    async def stop(self, ctx):
-        """Stops any music playing in VC."""
-        if await self._check_conditions(ctx):
-            if ctx.voice_client.is_playing():
-                ctx.voice_client.stop()
-                await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
-            else:
-                await ctx.reply('Music is not playing.')
 
 
 def setup(bot):
